@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addSchoolDays, countSchoolDays, dayOfWeek, indexHolidays, schoolYearRange } from './calendar';
 import { computeWarnings, DOC_FT_APPLICATION, DOC_FT_REPORT, fieldTripCumulative, rebuildDocs } from './rules';
+import { PUBLIC_HOLIDAYS } from './publicHolidays';
 import { summarize } from './stats';
 import { DEFAULT_SETTINGS, type AttendanceRecord, type Holiday } from './types';
 
@@ -53,9 +54,9 @@ describe('calendar', () => {
 });
 
 describe('필요서류', () => {
-  it('출석인정 체험학습: 결석계 + 신청서 + 보고서', () => {
+  it('출석인정 체험학습: 결석계 없이 신청서 + 보고서', () => {
     const docs = rebuildDocs([], '결석', '출석인정', '체험학습');
-    expect(docs.map((d) => d.key)).toEqual(['absence-note', DOC_FT_APPLICATION, DOC_FT_REPORT]);
+    expect(docs.map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT]);
     expect(docs.every((d) => d.required)).toBe(true);
   });
 
@@ -179,5 +180,20 @@ describe('요약', () => {
     expect(s.approvedAbsenceDays).toBe(2);
     expect(s.counts['지각']['질병']).toBe(1);
     expect(s.missingDocCount).toBe(3); // 질병결석·출석인정 결석계 + 공문
+  });
+});
+
+describe('기본 공휴일', () => {
+  it('2027년 목록이 월력요항 총계와 맞는다 (공휴일 24일, 일요일 겹침 4일, 토요일 겹침 5일)', () => {
+    const y2027 = PUBLIC_HOLIDAYS.filter((h) => h.date.startsWith('2027'));
+    expect(y2027).toHaveLength(76 - 52);
+    expect(y2027.filter((h) => dayOfWeek(h.date) === 0)).toHaveLength(76 - 72);
+    expect(y2027.filter((h) => dayOfWeek(h.date) === 6)).toHaveLength(124 - 119);
+  });
+
+  it('대체공휴일은 모두 평일', () => {
+    for (const h of PUBLIC_HOLIDAYS.filter((h) => h.name.startsWith('대체'))) {
+      expect([0, 6]).not.toContain(dayOfWeek(h.date));
+    }
   });
 });

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { formatKo } from '../domain/calendar';
+import { mergePublicHolidays } from '../domain/publicHolidays';
 import type { DeadlineBasis, HolidayType, Settings, Student } from '../domain/types';
 import { emptyState } from '../domain/types';
 import { exportBackup, normalize } from '../storage/db';
@@ -159,9 +160,12 @@ function HolidaySettings() {
     <section className="card">
       <h3>휴일 (공휴일·재량휴업일)</h3>
       <p className="hint">
-        토·일요일은 자동으로 제외됩니다. 공휴일·대체공휴일·재량휴업일은 직접 등록하세요. 달력 탭에서 날짜를 눌러 바로 지정·해제할 수도
-        있습니다. 휴일은 결석일수와 체험학습 일수 계산에서 빠집니다.
+        토·일요일은 자동으로 제외됩니다. 2026·2027년 공휴일(대체공휴일 포함)은 기본으로 들어 있고, 재량휴업일과 임시공휴일은 직접
+        등록하세요. 달력 탭에서 날짜를 눌러 바로 지정·해제할 수도 있습니다. 휴일은 결석일수와 체험학습 일수 계산에서 빠집니다.
       </p>
+      <button className="small" onClick={() => update((s) => ({ ...s, holidays: mergePublicHolidays(s.holidays) }))}>
+        2026·2027년 기본 공휴일 다시 넣기
+      </button>
       <div className="inline">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <input value={name} placeholder="이름" onChange={(e) => setName(e.target.value)} />

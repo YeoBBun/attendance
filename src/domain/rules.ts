@@ -32,8 +32,9 @@ const REASON_EVIDENCE: Record<ApprovedReason, Omit<DocItem, 'received'>[]> = {
 export function docTemplate(status: Status, kind: Kind, reason?: ApprovedReason): Omit<DocItem, 'received'>[] {
   switch (kind) {
     case '출석인정':
+      // 체험학습은 신청서·보고서로 대신하므로 결석계를 받지 않는다.
       return [
-        { key: DOC_ABSENCE_NOTE, label: '결석계', required: true },
+        ...(reason === '체험학습' ? [] : [{ key: DOC_ABSENCE_NOTE, label: '결석계', required: true }]),
         ...(reason ? REASON_EVIDENCE[reason] : []),
       ];
     case '질병': {

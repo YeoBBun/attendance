@@ -1,3 +1,5 @@
+import { PUBLIC_HOLIDAYS } from './publicHolidays';
+
 /** 날짜는 모두 'YYYY-MM-DD' 문자열로 다룬다. */
 export type DateStr = string;
 
@@ -101,5 +103,5 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export function emptyState(): AppState {
-  return { version: 1, students: [], records: [], holidays: [], settings: { ...DEFAULT_SETTINGS } };
+  return { version: 1, students: [], records: [], holidays: [...PUBLIC_HOLIDAYS], settings: { ...DEFAULT_SETTINGS } };
 }

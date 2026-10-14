@@ -14,4 +14,8 @@ npm test         # 규칙 로직 테스트
 npm run build    # dist/ 에 정적 파일 생성
 ```
 
-`dist/` 폴더를 정적 호스팅(GitHub Pages 등)에 올리면 됩니다.
+## 배포 (GitHub Pages)
+
+저장소 **Settings → Pages → Build and deployment → Source** 를 **GitHub Actions** 로 바꾸면,
+푸시할 때마다 `.github/workflows/deploy.yml` 이 빌드해서 배포합니다.
+(Source 를 "Deploy from a branch" 로 두면 빌드 전 소스가 그대로 올라가 화면이 뜨지 않고 404 오류가 납니다.)
