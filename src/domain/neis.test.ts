@@ -68,6 +68,6 @@ describe('나이스 내보내기', () => {
       '2026-10-31',
     );
     expect(f.records).toEqual([]);
-    expect(f.skipped.map((s) => s.label)).toEqual(['질병결과', '질병지각']);
+    expect(f.skipped.map((s) => s.label)).toEqual(['질병결과 (3교시)', '질병지각']);
   });
 });

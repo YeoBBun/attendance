@@ -251,7 +251,13 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
   const existing = state.records.filter((r) => r.studentId === studentId && r.startDate <= date && date <= r.endDate);
 
   const needsPeriod = status === '지각' || status === '조퇴';
-  const ready = status && kind && (kind !== '출석인정' || reason) && memo.trim() && (!needsPeriod || period !== undefined);
+  const ready =
+    status &&
+    kind &&
+    (kind !== '출석인정' || reason) &&
+    memo.trim() &&
+    (!needsPeriod || period !== undefined) &&
+    (status !== '결과' || periods.length > 0);
   const needsDetail = kind === '출석인정' && reason && NEEDS_DETAIL.includes(reason);
 
   const draft = useMemo<AttendanceRecord | null>(() => {
@@ -297,6 +303,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
           kind: kind ?? undefined,
           reason: reason ?? undefined,
           memo: memo.trim(),
+          periods: status === '결과' ? periods : undefined,
           lateUntil: status === '지각' ? period : undefined,
           leaveFrom: status === '조퇴' ? period : undefined,
         }}
@@ -329,6 +336,22 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
           }}
         />
         {(status === '지각' || status === '조퇴') && <PeriodPicker mode={status} value={period} onChange={setPeriod} />}
+        {status === '결과' && (
+          <div>
+            <span className="field-label">빠진 교시 (여러 개 고를 수 있어요)</span>
+            <div className="big-seg">
+              {PERIODS.map((p) => (
+                <button
+                  key={p}
+                  className={periods.includes(p) ? 'on' : ''}
+                  onClick={() => setPeriods((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p].sort((a, b) => a - b)))}
+                >
+                  {p}교시
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <Choice
           label="종류"
           options={KINDS}
@@ -339,22 +362,6 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
           }}
         />
         {kind === '출석인정' && <Choice label="사유" options={APPROVED_REASONS} value={reason} onChange={setReason} />}
-        {status === '결과' && (
-          <div>
-            <span className="field-label">교시</span>
-            <div className="big-seg">
-              {PERIODS.map((p) => (
-                <button
-                  key={p}
-                  className={periods.includes(p) ? 'on' : ''}
-                  onClick={() => setPeriods((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p].sort()))}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div>
           <span className="field-label">상세 사유 (필수)</span>
@@ -362,7 +369,9 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         </div>
 
         {status && kind && !memo.trim() && <p className="hint">상세 사유를 입력하면 저장할 수 있어요.</p>}
-        {needsPeriod && period === undefined && <p className="hint">{status} 교시를 고르면 저장할 수 있어요.</p>}
+        {((needsPeriod && period === undefined) || (status === '결과' && periods.length === 0)) && (
+          <p className="hint">{status} 교시를 고르면 저장할 수 있어요.</p>
+        )}
         {draft && !needsDetail && draft.docs.some((d) => d.required) && (
           <p className="info">받을 서류: {draft.docs.filter((d) => d.required).map((d) => d.label).join(', ')}</p>
         )}

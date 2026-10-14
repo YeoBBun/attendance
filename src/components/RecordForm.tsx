@@ -107,6 +107,7 @@ export function RecordForm({
     const c = clean(draft);
     const needLate = c.status === '지각' || (c.status === '결석' && c.fieldTrip?.endAM && c.startDate !== c.endDate);
     const needLeave = c.status === '조퇴' || (c.status === '결석' && c.fieldTrip?.startPM && c.startDate !== c.endDate);
+    if (c.status === '결과' && !c.periods?.length) return setError('결과 교시(빠진 교시)를 고르세요.');
     if (needLate && c.lateUntil === undefined) return setError('지각 교시(몇 교시까지 빠졌는지)를 고르세요.');
     if (needLeave && c.leaveFrom === undefined) return setError('조퇴 교시(몇 교시부터 빠졌는지)를 고르세요.');
     if (!isTripDraft && !draft.memo.trim()) return setError('상세 사유를 입력하세요 (예: 감기, 생리통).');
@@ -214,7 +215,7 @@ export function RecordForm({
           )}
           {draft.status === '결과' && (
             <div>
-              <label className="field-label">교시</label>
+              <label className="field-label">빠진 교시 (필수, 여러 개)</label>
               <div className="seg">
                 {PERIODS.map((p) => {
                   const on = draft.periods?.includes(p) ?? false;

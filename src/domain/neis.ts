@@ -74,7 +74,8 @@ export function buildNeisFile(
       const base = { date, number: student.number, name: student.name };
       const label = attType(r.kind, status);
       if (status === '결과') {
-        skipped.push({ ...base, label, reason: '결과는 자동 입력을 지원하지 않아요. 나이스에서 직접 넣어 주세요.' });
+        const which = r.periods?.length ? `${r.periods.join('·')}교시` : '교시 미입력';
+        skipped.push({ ...base, label: `${label} (${which})`, reason: '결과는 자동 입력을 지원하지 않아요. 나이스에서 직접 넣어 주세요.' });
         continue;
       }
       const note = periodNote(r, date);
