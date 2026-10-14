@@ -68,8 +68,14 @@ export function rebuildDocs(prev: DocItem[], status: Status, kind: Kind, reason?
   return [...fromTemplate, ...prev.filter(isCustomDoc)];
 }
 
-export function missingDocs(r: AttendanceRecord): DocItem[] {
-  return r.docs.filter((d) => d.required && !d.received);
+/**
+ * 아직 받지 않은 필수 서류. today 를 주면 체험학습 보고서는 체험학습이 끝난 뒤부터만 센다
+ * (다녀오기 전에는 받을 수 없는 서류이므로).
+ */
+export function missingDocs(r: AttendanceRecord, today?: DateStr): DocItem[] {
+  return r.docs.filter(
+    (d) => d.required && !d.received && !(today && d.key === DOC_FT_REPORT && today <= r.endDate),
+  );
 }
 
 // ─── 일수 계산 ─────────────────────────────────────────────
@@ -83,10 +89,16 @@ export function absenceDays(r: AttendanceRecord, holidays: HolidayIndex, from?: 
   return countSchoolDays(start, end, holidays);
 }
 
-/** 체험학습 사용 일수. 결석은 수업일 수, 지각(오전)·조퇴(오후)는 반일 0.5일. */
-export function fieldTripDays(r: AttendanceRecord, holidays: HolidayIndex): number {
+/**
+ * 체험학습 사용 일수. 결석은 수업일 수, 지각(오전)·조퇴(오후)는 반일 0.5일.
+ * from/to 를 주면 그 안에 든 날만 센다 (사용·예정 구분용).
+ */
+export function fieldTripDays(r: AttendanceRecord, holidays: HolidayIndex, from?: DateStr, to?: DateStr): number {
   if (r.kind !== '출석인정' || r.reason !== '체험학습') return 0;
-  if (r.status === '결석') return countSchoolDays(r.startDate, r.endDate, holidays);
+  const start = from && from > r.startDate ? from : r.startDate;
+  const end = to && to < r.endDate ? to : r.endDate;
+  if (start > end) return 0;
+  if (r.status === '결석') return countSchoolDays(start, end, holidays);
   if (r.status === '지각' || r.status === '조퇴') return 0.5;
   return 0;
 }
@@ -211,13 +223,28 @@ export function computeWarnings(ctx: RuleContext): Map<string, string[]> {
         if (total > settings.fieldTripYearlyMax) {
           add(r.id, `연간 체험학습 ${settings.fieldTripYearlyMax}일을 초과합니다 (누적 ${total}일).`);
         }
-        checkDeadline(r, DOC_FT_APPLICATION, applicationDeadline(r, settings, holidays), '신청서', today, add);
+        checkApplication(r, applicationDeadline(r, settings, holidays), today, add);
         checkDeadline(r, DOC_FT_REPORT, reportDeadline(r, settings, holidays), '보고서', today, add);
         break;
       }
     }
   }
   return out;
+}
+
+/** 사후 신청은 불가하므로, 기한을 넘긴 신청서는 미인정 처리 대상이다. */
+function checkApplication(r: AttendanceRecord, deadline: DateStr, today: DateStr, add: (id: string, msg: string) => void) {
+  const doc = r.docs.find((d) => d.key === DOC_FT_APPLICATION);
+  if (!doc || !doc.required) return;
+  if (doc.received) {
+    if (doc.receivedDate && doc.receivedDate > deadline) {
+      add(r.id, `신청서를 기한(${formatKo(deadline)}) 이후에 받았습니다 (${formatKo(doc.receivedDate)}). 사후 신청은 불가하므로 미인정 처리 대상입니다.`);
+    }
+  } else if (today >= r.startDate) {
+    add(r.id, '신청서 없이 실시되었습니다. 사후 신청은 불가하므로 미인정 처리 대상입니다.');
+  } else if (today > deadline) {
+    add(r.id, `신청서 기한(${formatKo(deadline)})이 지났습니다. 사후 신청은 불가하므로 미인정 처리 대상입니다.`);
+  }
 }
 
 function checkDeadline(

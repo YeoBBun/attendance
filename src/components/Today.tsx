@@ -21,6 +21,7 @@ import {
 } from '../domain/types';
 import { newId, useStore } from '../store';
 import { kindClass, KIND_SHORT, Modal, recordDates, recordTitle, sortStudents, studentLabel } from './common';
+import { FieldTripIntake } from './FieldTripIntake';
 import { clean, RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
 
@@ -38,6 +39,7 @@ export function Today() {
   const { state, holidays, warnings } = useStore();
   const [date, setDate] = useState(today);
   const [entryFor, setEntryFor] = useState<string | null>(null);
+  const [intake, setIntake] = useState(false);
   const now = today();
   const students = sortStudents(state.students);
   const holiday = holidays.get(date);
@@ -90,6 +92,10 @@ export function Today() {
         <section className="card">
           <h3>
             출결 입력 <span className="muted">학생을 누르세요 · {todays.size ? `${todays.size}명 기록됨` : '모두 출석'}</span>
+            <span className="spacer" />
+            <button className="small" onClick={() => setIntake(true)}>
+              + 체험학습 신청 접수
+            </button>
           </h3>
           <div className="student-grid">
             {students.map((s) => {
@@ -118,6 +124,7 @@ export function Today() {
         </p>
       )}
 
+      {intake && <FieldTripIntake onClose={() => setIntake(false)} />}
       {entryFor && <QuickEntry studentId={entryFor} date={date} onClose={() => setEntryFor(null)} />}
     </div>
   );
@@ -225,7 +232,13 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         {draft && !needsDetail && draft.docs.some((d) => d.required) && (
           <p className="info">받을 서류: {draft.docs.filter((d) => d.required).map((d) => d.label).join(', ')}</p>
         )}
-        {needsDetail && <p className="info">{reason}은 기간과 서류 정보를 함께 입력해야 해요. "자세히 입력"을 눌러 주세요.</p>}
+        {needsDetail && (
+          <p className="info">
+            {reason === '체험학습'
+              ? '체험학습은 신청서를 받은 날 첫 화면의 "+ 체험학습 신청 접수"로 입력해 주세요. 지금 입력하려면 "자세히 입력"을 누르세요.'
+              : '법정감염병은 소견서 기간을 함께 입력해야 해요. "자세히 입력"을 눌러 주세요.'}
+          </p>
+        )}
         {!needsDetail && preview.length > 0 && (
           <ul className="warnings">
             {preview.map((w) => (
@@ -288,9 +301,7 @@ function PendingDocs() {
   const rows = useMemo(() => {
     const out: PendingRow[] = [];
     for (const record of state.records) {
-      for (const doc of missingDocs(record)) {
-        // 체험학습 보고서는 체험학습이 끝난 뒤부터 받을 서류로 보여준다.
-        if (doc.key === DOC_FT_REPORT && now <= record.endDate) continue;
+      for (const doc of missingDocs(record, now)) {
         let deadline: string | undefined;
         if (doc.key === DOC_FT_APPLICATION) deadline = applicationDeadline(record, state.settings, holidays);
         if (doc.key === DOC_FT_REPORT) deadline = reportDeadline(record, state.settings, holidays);

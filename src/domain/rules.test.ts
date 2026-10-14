@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addSchoolDays, countSchoolDays, dayOfWeek, indexHolidays, schoolYearRange } from './calendar';
-import { computeWarnings, DOC_FT_APPLICATION, DOC_FT_REPORT, fieldTripCumulative, rebuildDocs } from './rules';
+import { computeWarnings, DOC_FT_APPLICATION, DOC_FT_REPORT, fieldTripCumulative, missingDocs, rebuildDocs } from './rules';
 import { PUBLIC_HOLIDAYS } from './publicHolidays';
 import { summarize } from './stats';
 import { DEFAULT_SETTINGS, type AttendanceRecord, type Holiday } from './types';
@@ -175,7 +175,7 @@ describe('요약', () => {
       rec({ kind: '출석인정', reason: '공문', startDate: '2026-10-08', endDate: '2026-10-12' }), // 10/9 공휴일, 주말 제외 → 2일
       rec({ kind: '질병', status: '지각', startDate: '2026-10-13' }),
     ];
-    const [s] = summarize([{ id: 's1', number: 1, name: '가' }], records, hol, new Map(), '2026-03-01', '2027-02-28');
+    const [s] = summarize([{ id: 's1', number: 1, name: '가' }], records, hol, new Map(), '2026-03-01', '2027-02-28', '2027-02-28');
     expect(s.absenceDays).toBe(3);
     expect(s.approvedAbsenceDays).toBe(2);
     expect(s.counts['지각']['질병']).toBe(1);
@@ -215,5 +215,33 @@ describe('저장 데이터 변환', () => {
     expect(s.version).toBe(2);
     expect(s.records[0].docs[0].required).toBe(true);
     expect(s.records[1].docs[0].required).toBe(false);
+  });
+});
+
+describe('체험학습 사전 입력', () => {
+  const trip = (p: Partial<AttendanceRecord>) =>
+    rec({ kind: '출석인정', reason: '체험학습', fieldTrip: { abroad: false, guardianAccompanied: true }, ...p });
+
+  it('미래 날짜는 통계에 넣지 않고 체험학습 예정 일수로 따로 센다', () => {
+    // 10/13(화)~10/16(금) 중 오늘이 10/14 → 사용 2일, 예정 2일
+    const r = trip({ startDate: '2026-10-13', endDate: '2026-10-16' });
+    const [s] = summarize([{ id: 's1', number: 1, name: '가' }], [r], hol, new Map(), '2026-03-01', '2027-02-28', '2026-10-14');
+    expect(s.fieldTripDays).toBe(2);
+    expect(s.fieldTripPlanned).toBe(2);
+    expect(s.approvedAbsenceDays).toBe(2);
+  });
+
+  it('보고서는 체험학습이 끝난 뒤부터 미제출로 센다', () => {
+    const r = trip({ startDate: '2026-10-19', endDate: '2026-10-20' });
+    expect(missingDocs(r, '2026-10-20').map((d) => d.key)).toEqual([DOC_FT_APPLICATION]);
+    expect(missingDocs(r, '2026-10-21').map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT]);
+  });
+
+  it('신청서 없이 실시되었거나 기한 후 접수면 미인정 대상 경고', () => {
+    const none = trip({ id: 'n', startDate: '2026-10-13' });
+    expect(warningsFor([none], '2026-10-13').get('n')?.[0]).toContain('신청서 없이 실시');
+    const late = trip({ id: 'l', startDate: '2026-10-19' });
+    late.docs = late.docs.map((d) => (d.key === DOC_FT_APPLICATION ? { ...d, received: true, receivedDate: '2026-10-16' } : d));
+    expect(warningsFor([late], '2026-10-16').get('l')?.[0]).toContain('미인정 처리 대상');
   });
 });

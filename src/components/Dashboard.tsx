@@ -26,7 +26,7 @@ export function Dashboard() {
   }, [year, month]);
 
   const rows = useMemo(
-    () => summarize(sortStudents(state.students), state.records, holidays, warnings, from, to),
+    () => summarize(sortStudents(state.students), state.records, holidays, warnings, from, to, today()),
     [state.students, state.records, holidays, warnings, from, to],
   );
 
@@ -107,8 +107,13 @@ export function Dashboard() {
                 )}
                 <td className="num strong">{r.absenceDays || ''}</td>
                 <td className="num">{r.approvedAbsenceDays || ''}</td>
-                <td className={`num${r.fieldTripDays > state.settings.fieldTripYearlyMax ? ' bad' : ''}`}>
-                  {r.fieldTripDays ? `${r.fieldTripDays}/${state.settings.fieldTripYearlyMax}` : ''}
+                <td
+                  className={`num${r.fieldTripDays + r.fieldTripPlanned > state.settings.fieldTripYearlyMax ? ' bad' : ''}`}
+                  title="사용(+예정)/연간 한도"
+                >
+                  {r.fieldTripDays || r.fieldTripPlanned
+                    ? `${r.fieldTripDays}${r.fieldTripPlanned ? `+${r.fieldTripPlanned}` : ''}/${state.settings.fieldTripYearlyMax}`
+                    : ''}
                 </td>
                 <td className={`num${r.missingDocCount ? ' bad' : ''}`}>{r.missingDocCount || ''}</td>
                 <td className={`num${r.warningCount ? ' warn' : ''}`}>{r.warningCount || ''}</td>
@@ -119,7 +124,7 @@ export function Dashboard() {
       </div>
       <p className="hint">
         총결석 = 질병·미인정·기타 결석일수 (출석인정 제외). 결석일수는 주말·공휴일·재량휴업일을 뺀 수업일 기준입니다. 체험학습은 학년도
-        누적입니다.
+        누적이고, "5+3"은 사용 5일·예정 3일입니다. 출결 통계는 오늘까지만 셉니다.
       </p>
 
       {detail && <StudentDetail studentId={detail} from={from} to={to} onClose={() => setDetail(null)} />}
@@ -174,6 +179,7 @@ function exportCsv(rows: StudentSummary[], label: string) {
     '총결석일수',
     '출석인정결석일수',
     '체험학습사용일수',
+    '체험학습예정일수',
     '누락서류',
     '경고',
   ];
@@ -184,6 +190,7 @@ function exportCsv(rows: StudentSummary[], label: string) {
     r.absenceDays,
     r.approvedAbsenceDays,
     r.fieldTripDays,
+    r.fieldTripPlanned,
     r.missingDocCount,
     r.warningCount,
   ]);
