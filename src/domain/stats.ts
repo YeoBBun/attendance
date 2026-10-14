@@ -53,7 +53,7 @@ export function summarize(
     let warn = 0;
     for (const r of mine) {
       if (r.endDate < from || r.startDate > to) continue;
-      missing += missingDocs(r, today).length;
+      missing += missingDocs(r).length;
       warn += warnings.get(r.id)?.length ?? 0;
       if (r.startDate > countTo) continue;
       if (r.status === '결석') {

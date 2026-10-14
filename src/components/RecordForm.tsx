@@ -95,6 +95,7 @@ export function RecordForm({
     const ids = isNew ? selected : [draft.studentId];
     if (ids.length === 0 || !ids[0]) return setError('학생을 선택하세요.');
     if (draft.kind === '출석인정' && !draft.reason) return setError('출석인정 세부 사유를 선택하세요.');
+    if (!draft.memo.trim()) return setError('상세 사유를 입력하세요 (예: 감기, 생리통).');
     const cleaned = clean(draft);
     update((s) => {
       if (!isNew) return { ...s, records: s.records.map((r) => (r.id === cleaned.id ? cleaned : r)) };
@@ -346,8 +347,8 @@ export function RecordForm({
         </section>
 
         <section>
-          <label className="field-label">메모</label>
-          <textarea rows={2} value={draft.memo} onChange={(e) => set({ memo: e.target.value })} />
+          <label className="field-label">상세 사유 (필수)</label>
+          <textarea rows={2} value={draft.memo} placeholder="예: 감기, 생리통, 가족여행(제주)" onChange={(e) => set({ memo: e.target.value })} />
         </section>
 
         {preview && preview.warnings.length > 0 && (

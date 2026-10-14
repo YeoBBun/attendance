@@ -19,13 +19,14 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
   const [abroad, setAbroad] = useState(false);
   const [guardian, setGuardian] = useState(false);
   const [receivedDate, setReceivedDate] = useState(now);
+  const [memo, setMemo] = useState('');
 
   const endDate = end && end >= start ? end : start;
   const singleDay = start && endDate === start;
   const effectivePart: Part = singleDay ? part : '종일';
 
   const draft = useMemo<AttendanceRecord | null>(() => {
-    if (!studentId || !start) return null;
+    if (!studentId || !start || !memo.trim()) return null;
     const status = PART_STATUS[effectivePart];
     const docs = rebuildDocs([], status, '출석인정', '체험학습').map((d) =>
       d.key === DOC_FT_APPLICATION ? { ...d, received: true, receivedDate } : d,
@@ -40,9 +41,9 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
       endDate: status === '결석' ? endDate : start,
       fieldTrip: { abroad, guardianAccompanied: guardian },
       docs,
-      memo: '',
+      memo: memo.trim(),
     };
-  }, [studentId, start, endDate, effectivePart, abroad, guardian, receivedDate]);
+  }, [studentId, start, endDate, effectivePart, abroad, guardian, receivedDate, memo]);
 
   const preview = useMemo(() => {
     if (!draft) return null;
@@ -126,6 +127,11 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={guardian} onChange={(e) => setGuardian(e.target.checked)} />
             보호자 동반 확인
           </label>
+        </section>
+
+        <section>
+          <label className="field-label">체험 내용 (필수)</label>
+          <input className="wide" value={memo} placeholder="예: 가족여행(제주), 친척 결혼식 참석" onChange={(e) => setMemo(e.target.value)} />
         </section>
 
         <section>

@@ -231,10 +231,9 @@ describe('체험학습 사전 입력', () => {
     expect(s.approvedAbsenceDays).toBe(2);
   });
 
-  it('보고서는 체험학습이 끝난 뒤부터 미제출로 센다', () => {
+  it('보고서는 접수 때부터 받을 서류로 잡힌다', () => {
     const r = trip({ startDate: '2026-10-19', endDate: '2026-10-20' });
-    expect(missingDocs(r, '2026-10-20').map((d) => d.key)).toEqual([DOC_FT_APPLICATION]);
-    expect(missingDocs(r, '2026-10-21').map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT]);
+    expect(missingDocs(r).map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT]);
   });
 
   it('신청서 없이 실시되었거나 기한 후 접수면 미인정 대상 경고', () => {

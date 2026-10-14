@@ -68,14 +68,9 @@ export function rebuildDocs(prev: DocItem[], status: Status, kind: Kind, reason?
   return [...fromTemplate, ...prev.filter(isCustomDoc)];
 }
 
-/**
- * 아직 받지 않은 필수 서류. today 를 주면 체험학습 보고서는 체험학습이 끝난 뒤부터만 센다
- * (다녀오기 전에는 받을 수 없는 서류이므로).
- */
-export function missingDocs(r: AttendanceRecord, today?: DateStr): DocItem[] {
-  return r.docs.filter(
-    (d) => d.required && !d.received && !(today && d.key === DOC_FT_REPORT && today <= r.endDate),
-  );
+/** 아직 받지 않은 필수 서류. 체험학습 보고서는 신청 접수 때부터 받을 서류로 잡힌다. */
+export function missingDocs(r: AttendanceRecord): DocItem[] {
+  return r.docs.filter((d) => d.required && !d.received);
 }
 
 // ─── 일수 계산 ─────────────────────────────────────────────

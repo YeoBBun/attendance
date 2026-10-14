@@ -21,7 +21,7 @@ export function RecordList() {
       state.records
         .filter((r) => !studentId || r.studentId === studentId)
         .filter((r) => !month || monthKey(r.startDate) <= month && monthKey(r.endDate) >= month)
-        .filter((r) => filter === 'all' || (filter === 'missing' ? missingDocs(r, today()).length > 0 : warnings.has(r.id)))
+        .filter((r) => filter === 'all' || (filter === 'missing' ? missingDocs(r).length > 0 : warnings.has(r.id)))
         .sort((a, b) => b.startDate.localeCompare(a.startDate)),
     [state.records, studentId, month, filter, warnings],
   );

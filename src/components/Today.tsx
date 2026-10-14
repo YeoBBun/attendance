@@ -207,7 +207,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
   const student = state.students.find((s) => s.id === studentId);
   const existing = state.records.filter((r) => r.studentId === studentId && r.startDate <= date && date <= r.endDate);
 
-  const ready = status && kind && (kind !== '출석인정' || reason);
+  const ready = status && kind && (kind !== '출석인정' || reason) && memo.trim();
   const needsDetail = kind === '출석인정' && reason && NEEDS_DETAIL.includes(reason);
 
   const draft = useMemo<AttendanceRecord | null>(() => {
@@ -295,10 +295,11 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         )}
 
         <div>
-          <span className="field-label">사유 메모 (선택)</span>
+          <span className="field-label">상세 사유 (필수)</span>
           <input className="wide" value={memo} placeholder="예: 감기, 생리통, 병원 진료" onChange={(e) => setMemo(e.target.value)} />
         </div>
 
+        {status && kind && !memo.trim() && <p className="hint">상세 사유를 입력하면 저장할 수 있어요.</p>}
         {draft && !needsDetail && draft.docs.some((d) => d.required) && (
           <p className="info">받을 서류: {draft.docs.filter((d) => d.required).map((d) => d.label).join(', ')}</p>
         )}
@@ -318,7 +319,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         )}
 
         <footer className="form-actions">
-          <button onClick={() => setDetail(true)}>자세히 입력 (여러 날·메모 등)</button>
+          <button onClick={() => setDetail(true)}>자세히 입력 (여러 날 등)</button>
           <span className="spacer" />
           <button className="primary big" disabled={!ready || !!needsDetail} onClick={save}>
             저장
@@ -371,7 +372,7 @@ function PendingDocs() {
   const rows = useMemo(() => {
     const out: PendingRow[] = [];
     for (const record of state.records) {
-      for (const doc of missingDocs(record, now)) {
+      for (const doc of missingDocs(record)) {
         let deadline: string | undefined;
         if (doc.key === DOC_FT_APPLICATION) deadline = applicationDeadline(record, state.settings, holidays);
         if (doc.key === DOC_FT_REPORT) deadline = reportDeadline(record, state.settings, holidays);
@@ -414,6 +415,7 @@ function PendingDocs() {
                 <span className="muted">
                   {' '}
                   · {recordDates(record)} {recordTitle(record)}
+                  {doc.key === DOC_FT_REPORT && now <= record.endDate && ' · 다녀온 후 제출'}
                   {deadline && ` · 기한 ${formatKo(deadline)}`}
                 </span>
               </span>
