@@ -15,7 +15,7 @@ import type { ApprovedReason, AttendanceRecord, DateStr, DocItem, Kind, Settings
 export const DOC_ABSENCE_NOTE = 'absence-note';
 export const DOC_FT_APPLICATION = 'fieldtrip:application';
 export const DOC_FT_REPORT = 'fieldtrip:report';
-const DOC_MEDICAL = 'evidence:medical';
+export const DOC_MEDICAL = 'evidence:medical';
 
 const REASON_EVIDENCE: Record<ApprovedReason, Omit<DocItem, 'received'>[]> = {
   법정감염병: [{ key: 'evidence:infection', label: '의사 소견서', required: true }],
@@ -38,9 +38,13 @@ export function docTemplate(status: Status, kind: Kind, reason?: ApprovedReason)
         ...(reason ? REASON_EVIDENCE[reason] : []),
       ];
     case '질병': {
-      // 질병 지각·조퇴·결과는 담임 재량으로 증빙만 선택적으로 받는다.
-      const medical = { key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: false };
-      return status === '결석' ? [{ key: DOC_ABSENCE_NOTE, label: '결석계', required: true }, medical] : [medical];
+      // 질병 결석은 결석계와 증빙 모두 필수. 질병 지각·조퇴·결과는 담임 재량으로 증빙만 선택적으로 받는다.
+      return status === '결석'
+        ? [
+            { key: DOC_ABSENCE_NOTE, label: '결석계', required: true },
+            { key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: true },
+          ]
+        : [{ key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: false }];
     }
     default:
       return [];

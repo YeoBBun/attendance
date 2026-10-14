@@ -60,11 +60,11 @@ describe('필요서류', () => {
     expect(docs.every((d) => d.required)).toBe(true);
   });
 
-  it('질병 결석은 결석계 필수, 증빙은 선택', () => {
+  it('질병 결석은 결석계와 증빙 모두 필수', () => {
     const docs = rebuildDocs([], '결석', '질병');
     expect(docs.map((d) => [d.label, d.required])).toEqual([
       ['결석계', true],
-      ['진료확인서 등 증빙', false],
+      ['진료확인서 등 증빙', true],
     ]);
   });
 
@@ -179,7 +179,7 @@ describe('요약', () => {
     expect(s.absenceDays).toBe(3);
     expect(s.approvedAbsenceDays).toBe(2);
     expect(s.counts['지각']['질병']).toBe(1);
-    expect(s.missingDocCount).toBe(3); // 질병결석·출석인정 결석계 + 공문
+    expect(s.missingDocCount).toBe(4); // 질병결석 결석계·증빙 + 출석인정 결석계·공문
   });
 });
 
@@ -195,5 +195,25 @@ describe('기본 공휴일', () => {
     for (const h of PUBLIC_HOLIDAYS.filter((h) => h.name.startsWith('대체'))) {
       expect([0, 6]).not.toContain(dayOfWeek(h.date));
     }
+  });
+});
+
+describe('저장 데이터 변환', () => {
+  it('v1 데이터의 질병 결석 증빙을 필수로 바꾼다', async () => {
+    const { normalize } = await import('../storage/db');
+    const v1 = {
+      version: 1,
+      students: [],
+      holidays: [],
+      settings: {},
+      records: [
+        rec({ id: 'a', kind: '질병', status: '결석', docs: [{ key: 'evidence:medical', label: '증빙', required: false, received: false }] }),
+        rec({ id: 'b', kind: '질병', status: '지각', docs: [{ key: 'evidence:medical', label: '증빙', required: false, received: false }] }),
+      ],
+    };
+    const s = normalize(v1);
+    expect(s.version).toBe(2);
+    expect(s.records[0].docs[0].required).toBe(true);
+    expect(s.records[1].docs[0].required).toBe(false);
   });
 });
