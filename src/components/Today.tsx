@@ -20,7 +20,7 @@ import {
   type Status,
 } from '../domain/types';
 import { newId, useStore } from '../store';
-import { kindClass, KIND_SHORT, Modal, recordDates, recordTitle, sortStudents, studentLabel } from './common';
+import { dayStatus, kindClass, KIND_SHORT, Modal, recordDates, recordTitle, sortStudents, studentLabel } from './common';
 import { FieldTripIntake } from './FieldTripIntake';
 import { clean, RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
@@ -84,6 +84,8 @@ export function Today() {
         )}
       </header>
 
+      {students.length > 0 && <DaySummary date={date} records={todays} />}
+
       {students.length === 0 ? (
         <p className="empty">
           먼저 <a href="#settings">설정</a>에서 학생 명단을 등록하세요.
@@ -130,6 +132,68 @@ export function Today() {
   );
 }
 
+/** 그날 출결 현황을 "1. 김철수 : 질병결석 (감기)" 형식으로 보여준다. */
+function DaySummary({ date, records }: { date: string; records: Map<string, AttendanceRecord[]> }) {
+  const { state, holidays } = useStore();
+  const [copied, setCopied] = useState(false);
+  const isToday = date === today();
+
+  const lines = sortStudents(state.students).flatMap((s) =>
+    (records.get(s.id) ?? []).map((r) => {
+      const { label, detail } = dayStatus(r, date, holidays);
+      return { key: r.id, record: r, text: `${s.number}. ${s.name} : ${label}${detail ? ` (${detail})` : ''}`, name: `${s.number}. ${s.name}`, label, detail };
+    }),
+  );
+  const counts = STATUSES.map((st) => [st, [...records.values()].flat().filter((r) => r.status === st).length] as const).filter(
+    ([, n]) => n > 0,
+  );
+
+  const copy = async () => {
+    const text = [`${formatKo(date)} 출결`, ...lines.map((l) => l.text)].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // 클립보드 권한이 없는 환경 대비
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <section className="card">
+      <h3>
+        {isToday ? '오늘' : formatKo(date)} 출결 현황
+        <span className="muted">{counts.length ? counts.map(([st, n]) => `${st} ${n}`).join(' · ') : '모두 출석'}</span>
+        <span className="spacer" />
+        {lines.length > 0 && (
+          <button className="small" onClick={copy}>
+            {copied ? '복사됨 ✓' : '복사'}
+          </button>
+        )}
+      </h3>
+      {lines.length === 0 ? (
+        <p className="muted">결석·지각·조퇴·결과가 없어요.</p>
+      ) : (
+        <ul className="day-summary">
+          {lines.map((l) => (
+            <li key={l.key}>
+              <span className="who">{l.name}</span>
+              <span className={`tag ${kindClass(l.record.kind)}`}>{l.label}</span>
+              {l.detail && <span className="muted">({l.detail})</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /** 학생 한 명의 그날 출결을 몇 번의 터치로 입력한다. */
 function QuickEntry({ studentId, date, onClose }: { studentId: string; date: string; onClose: () => void }) {
   const { state, update, holidays } = useStore();
@@ -137,6 +201,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
   const [kind, setKind] = useState<Kind | null>(null);
   const [reason, setReason] = useState<ApprovedReason | null>(null);
   const [periods, setPeriods] = useState<number[]>([]);
+  const [memo, setMemo] = useState('');
   const [editing, setEditing] = useState<AttendanceRecord | null>(null);
   const [detail, setDetail] = useState(false);
   const student = state.students.find((s) => s.id === studentId);
@@ -158,9 +223,9 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
       endDate: date,
       periods: status === '결과' ? periods : undefined,
       docs: rebuildDocs([], status!, kind!, kind === '출석인정' ? r : undefined),
-      memo: '',
+      memo: memo.trim(),
     });
-  }, [ready, status, kind, reason, periods, studentId, date]);
+  }, [ready, status, kind, reason, periods, memo, studentId, date]);
 
   const preview = useMemo(
     () =>
@@ -181,7 +246,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
       <RecordForm
         defaultStudentId={studentId}
         defaultDate={date}
-        prefill={{ status: status ?? undefined, kind: kind ?? undefined, reason: reason ?? undefined }}
+        prefill={{ status: status ?? undefined, kind: kind ?? undefined, reason: reason ?? undefined, memo: memo.trim() }}
         onClose={onClose}
       />
     );
@@ -228,6 +293,11 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
             </div>
           </div>
         )}
+
+        <div>
+          <span className="field-label">사유 메모 (선택)</span>
+          <input className="wide" value={memo} placeholder="예: 감기, 생리통, 병원 진료" onChange={(e) => setMemo(e.target.value)} />
+        </div>
 
         {draft && !needsDetail && draft.docs.some((d) => d.required) && (
           <p className="info">받을 서류: {draft.docs.filter((d) => d.required).map((d) => d.label).join(', ')}</p>
