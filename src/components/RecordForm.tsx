@@ -15,21 +15,23 @@ import { Modal, sortStudents } from './common';
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
-function blankRecord(studentId: string, date: string): AttendanceRecord {
-  return {
+function blankRecord(studentId: string, date: string, prefill?: Partial<AttendanceRecord>): AttendanceRecord {
+  const base: AttendanceRecord = {
     id: newId(),
     studentId,
     status: '결석',
     kind: '질병',
     startDate: date,
     endDate: date,
-    docs: rebuildDocs([], '결석', '질병'),
+    docs: [],
     memo: '',
+    ...prefill,
   };
+  return { ...base, docs: rebuildDocs([], base.status, base.kind, base.kind === '출석인정' ? base.reason : undefined) };
 }
 
 /** 저장 전에 상황·종류에 맞지 않는 필드를 정리한다. */
-function clean(r: AttendanceRecord): AttendanceRecord {
+export function clean(r: AttendanceRecord): AttendanceRecord {
   const out: AttendanceRecord = { ...r };
   if (out.status !== '결석') out.endDate = out.startDate;
   if (out.status !== '결과') delete out.periods;
@@ -43,18 +45,21 @@ export function RecordForm({
   initial,
   defaultDate,
   defaultStudentId,
+  prefill,
   onClose,
 }: {
   initial?: AttendanceRecord;
   defaultDate?: string;
   defaultStudentId?: string;
+  /** 새 기록의 초기값 (간편 입력에서 넘어올 때) */
+  prefill?: Partial<AttendanceRecord>;
   onClose: () => void;
 }) {
   const { state, update, holidays } = useStore();
   const students = sortStudents(state.students);
   const isNew = !initial;
   const [draft, setDraft] = useState<AttendanceRecord>(
-    () => initial ?? blankRecord(defaultStudentId ?? '', defaultDate ?? today()),
+    () => initial ?? blankRecord(defaultStudentId ?? '', defaultDate ?? today(), prefill),
   );
   // 새 기록은 여러 학생에게 한 번에 넣을 수 있다 (예: 공문 대회 참가).
   const [selected, setSelected] = useState<string[]>(defaultStudentId ? [defaultStudentId] : []);

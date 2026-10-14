@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
 import { CalendarView } from './components/CalendarView';
 import { Dashboard } from './components/Dashboard';
-import { DocsView } from './components/DocsView';
 import { RecordList } from './components/RecordList';
 import { SettingsView } from './components/SettingsView';
-import { missingDocs } from './domain/rules';
+import { Today } from './components/Today';
 import { StoreProvider, useStore } from './store';
 
 const TABS = [
+  { id: 'today', label: '오늘' },
   { id: 'dashboard', label: '현황판' },
   { id: 'records', label: '출결 기록' },
-  { id: 'docs', label: '서류 수합' },
   { id: 'calendar', label: '달력' },
   { id: 'settings', label: '설정' },
 ] as const;
@@ -20,7 +19,7 @@ const BACKUP_REMIND_DAYS = 7;
 
 function readTab(): TabId {
   const h = location.hash.slice(1);
-  return TABS.some((t) => t.id === h) ? (h as TabId) : 'dashboard';
+  return TABS.some((t) => t.id === h) ? (h as TabId) : 'today';
 }
 
 function Shell() {
@@ -33,7 +32,6 @@ function Shell() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const missingCount = state.records.reduce((n, r) => n + missingDocs(r).length, 0);
   const last = state.settings.lastBackupAt ? Date.parse(state.settings.lastBackupAt) : 0;
   const needBackup = state.records.length > 0 && Date.now() - last > BACKUP_REMIND_DAYS * 86_400_000;
 
@@ -47,7 +45,6 @@ function Shell() {
           {TABS.map((t) => (
             <a key={t.id} href={`#${t.id}`} className={tab === t.id ? 'on' : ''}>
               {t.label}
-              {t.id === 'docs' && missingCount > 0 && <span className="badge">{missingCount}</span>}
             </a>
           ))}
         </nav>
@@ -60,9 +57,9 @@ function Shell() {
         </div>
       )}
       <main>
+        {tab === 'today' && <Today />}
         {tab === 'dashboard' && <Dashboard />}
         {tab === 'records' && <RecordList />}
-        {tab === 'docs' && <DocsView />}
         {tab === 'calendar' && <CalendarView />}
         {tab === 'settings' && <SettingsView />}
       </main>
