@@ -58,7 +58,7 @@ export function Dashboard() {
           ))}
         </select>
         <span className="spacer" />
-        <button onClick={() => exportCsv(rows, `${year}학년도${month === 'all' ? '' : `_${month}월`}`)}>엑셀(CSV) 내보내기</button>
+        <button onClick={() => exportCsv(rows, `${year}${month === 'all' ? '' : `_${String(month).padStart(2, '0')}`}`)}>엑셀(CSV) 내보내기</button>
       </div>
 
       <div className="table-wrap">
@@ -200,5 +200,5 @@ function exportCsv(rows: StudentSummary[], label: string) {
   ]);
   const csv = [header, ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   // BOM 을 붙여야 엑셀에서 한글이 깨지지 않는다.
-  downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `출결현황_${label}.csv`);
+  downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `attendance_summary_${label}.csv`);
 }

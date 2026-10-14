@@ -3,7 +3,7 @@ import { addDays, formatKo, schoolYearOf, schoolYearRange, today } from '../doma
 import { applicationDeadline, computeWarnings, DOC_FT_APPLICATION, fieldTripDays, rebuildDocs, reportDeadline } from '../domain/rules';
 import type { AttendanceRecord, Status } from '../domain/types';
 import { newId, useStore } from '../store';
-import { Modal, sortStudents } from './common';
+import { Modal, PeriodPicker, sortStudents } from './common';
 
 type Part = '종일' | '오전' | '오후';
 const PART_STATUS: Record<Part, Status> = { 종일: '결석', 오전: '지각', 오후: '조퇴' };
@@ -21,6 +21,8 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
   const [receivedDate, setReceivedDate] = useState(now);
   const [startPM, setStartPM] = useState(false);
   const [endAM, setEndAM] = useState(false);
+  const [leaveFrom, setLeaveFrom] = useState<number | undefined>(undefined);
+  const [lateUntil, setLateUntil] = useState<number | undefined>(undefined);
 
   const endDate = end && end >= start ? end : start;
   const singleDay = start && endDate === start;
@@ -29,6 +31,10 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
   const draft = useMemo<AttendanceRecord | null>(() => {
     if (!studentId || !start) return null;
     const status = PART_STATUS[effectivePart];
+    // 반일은 나이스 입력에 교시가 필요하다: 오전(지각)은 몇 교시까지, 오후(조퇴)는 몇 교시부터
+    const useLate = singleDay ? status === '지각' : endAM;
+    const useLeave = singleDay ? status === '조퇴' : startPM;
+    if ((useLate && lateUntil === undefined) || (useLeave && leaveFrom === undefined)) return null;
     const docs = rebuildDocs([], status, '출석인정', '체험학습').map((d) =>
       d.key === DOC_FT_APPLICATION ? { ...d, received: true, receivedDate } : d,
     );
@@ -43,10 +49,12 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
       fieldTrip: singleDay
         ? { abroad, guardianAccompanied: guardian }
         : { abroad, guardianAccompanied: guardian, startPM, endAM },
+      ...(useLate ? { lateUntil } : {}),
+      ...(useLeave ? { leaveFrom } : {}),
       docs,
       memo: '',
     };
-  }, [studentId, start, endDate, singleDay, effectivePart, abroad, guardian, receivedDate, startPM, endAM]);
+  }, [studentId, start, endDate, singleDay, effectivePart, abroad, guardian, receivedDate, startPM, endAM, lateUntil, leaveFrom]);
 
   const preview = useMemo(() => {
     if (!draft) return null;
@@ -126,6 +134,8 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             </div>
+            {startPM && <PeriodPicker mode="조퇴" label="첫날 몇 교시부터?" value={leaveFrom} onChange={setLeaveFrom} />}
+            {endAM && <PeriodPicker mode="지각" label="마지막 날 몇 교시까지?" value={lateUntil} onChange={setLateUntil} />}
             {(startPM || endAM) && (
               <p className="hint">
                 {[startPM && '첫날은 인정조퇴', endAM && '마지막 날은 인정지각'].filter(Boolean).join(', ')}으로 기록됩니다.
@@ -145,6 +155,8 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
+            {part === '오전' && <PeriodPicker mode="지각" label="몇 교시까지?" value={lateUntil} onChange={setLateUntil} />}
+            {part === '오후' && <PeriodPicker mode="조퇴" label="몇 교시부터?" value={leaveFrom} onChange={setLeaveFrom} />}
             {part !== '종일' && <p className="hint">{part === '오전' ? '인정지각' : '인정조퇴'}으로 기록됩니다.</p>}
           </section>
         )}
@@ -169,6 +181,7 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
           <input type="date" value={receivedDate} onChange={(e) => e.target.value && setReceivedDate(e.target.value)} />
         </section>
 
+        {studentId && start && !draft && <p className="hint">반일 교시를 고르면 접수할 수 있어요.</p>}
         {preview && (
           <p className="info">
             올해 사용 {preview.used}일{preview.planned ? ` · 예정 ${preview.planned}일` : ''} · 이번 {preview.thisTrip}일 → 남은{' '}

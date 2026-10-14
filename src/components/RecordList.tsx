@@ -5,6 +5,7 @@ import { summarize, type StudentSummary } from '../domain/stats';
 import { KINDS, STATUSES, type AttendanceRecord } from '../domain/types';
 import { useStore } from '../store';
 import { KIND_SHORT, sortStudents } from './common';
+import { NeisExport } from './NeisExport';
 import { RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
 
@@ -16,6 +17,7 @@ export function RecordList() {
   const [month, setMonth] = useState(() => monthKey(today()));
   const [filter, setFilter] = useState<Filter>('all');
   const [editing, setEditing] = useState<AttendanceRecord | 'new' | null>(null);
+  const [neis, setNeis] = useState(false);
 
   const records = useMemo(
     () =>
@@ -54,6 +56,7 @@ export function RecordList() {
           </button>
         </div>
         <span className="spacer" />
+        <button onClick={() => setNeis(true)}>나이스 파일</button>
         <button className="primary" onClick={() => setEditing('new')}>
           + 출결 추가
         </button>
@@ -73,6 +76,7 @@ export function RecordList() {
         </ul>
       )}
 
+      {neis && <NeisExport onClose={() => setNeis(false)} />}
       {editing && (
         <RecordForm
           initial={editing === 'new' ? undefined : editing}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { AttendanceRecord, Kind, Student } from '../domain/types';
 import { countSchoolDays, formatKo, type HolidayIndex } from '../domain/calendar';
+import { periodNote } from '../domain/neis';
 import { statusOn } from '../domain/rules';
 
 const modalStack: object[] = [];
@@ -71,6 +72,8 @@ export function dayStatus(r: AttendanceRecord, date: string, holidays: HolidayIn
   // 출석인정은 사유를 기본으로 보이고, 메모가 사유를 이미 담고 있으면(예: 생리통) 메모만 보인다.
   const memo = r.memo.trim();
   const parts = [r.reason && !memo.includes(r.reason) ? [r.reason, memo].filter(Boolean).join(', ') : memo];
+  const period = periodNote(r, date);
+  if (period) parts.push(period);
   if (r.status === '결석' && r.startDate !== r.endDate) {
     // 몇째 날인지 (반일 포함 수업일 기준)
     const total = countSchoolDays(r.startDate, r.endDate, holidays);
@@ -78,4 +81,38 @@ export function dayStatus(r: AttendanceRecord, date: string, holidays: HolidayIn
     if (total > 1) parts.push(`${nth}/${total}일차`);
   }
   return { label: `${kind}${status}${periods}`, detail: parts.filter(Boolean).join(' ') };
+}
+
+const PERIOD_CHOICES = [1, 2, 3, 4, 5, 6, 7];
+
+/**
+ * 지각·조퇴 교시 고르기. 지각은 "몇 교시까지 빠졌나" (조회만 = 0), 조퇴는 "몇 교시부터 빠졌나".
+ * 나이스 자동 입력에 꼭 필요하다.
+ */
+export function PeriodPicker({
+  mode,
+  value,
+  onChange,
+  label,
+}: {
+  mode: '지각' | '조퇴';
+  value: number | undefined;
+  onChange: (n: number) => void;
+  label?: string;
+}) {
+  const options = mode === '지각' ? [0, ...PERIOD_CHOICES] : PERIOD_CHOICES;
+  return (
+    <div>
+      <span className="field-label">
+        {label ?? (mode === '지각' ? '몇 교시까지 빠졌나요?' : '몇 교시부터 빠졌나요?')}
+      </span>
+      <div className="big-seg">
+        {options.map((n) => (
+          <button key={n} type="button" className={value === n ? 'on' : ''} onClick={() => onChange(n)}>
+            {n === 0 ? '조회만' : mode === '지각' ? `~${n}교시` : `${n}교시~`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }

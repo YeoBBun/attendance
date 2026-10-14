@@ -21,7 +21,7 @@ import {
   type Status,
 } from '../domain/types';
 import { newId, useStore } from '../store';
-import { dayStatus, kindClass, KIND_SHORT, Modal, sortStudents, studentLabel } from './common';
+import { dayStatus, kindClass, KIND_SHORT, Modal, PeriodPicker, sortStudents, studentLabel } from './common';
 import { FieldTripIntake } from './FieldTripIntake';
 import { clean, RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
@@ -244,12 +244,14 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
   const [reason, setReason] = useState<ApprovedReason | null>(null);
   const [periods, setPeriods] = useState<number[]>([]);
   const [memo, setMemo] = useState('');
+  const [period, setPeriod] = useState<number | undefined>(undefined);
   const [editing, setEditing] = useState<AttendanceRecord | null>(null);
   const [detail, setDetail] = useState(false);
   const student = state.students.find((s) => s.id === studentId);
   const existing = state.records.filter((r) => r.studentId === studentId && r.startDate <= date && date <= r.endDate);
 
-  const ready = status && kind && (kind !== '출석인정' || reason) && memo.trim();
+  const needsPeriod = status === '지각' || status === '조퇴';
+  const ready = status && kind && (kind !== '출석인정' || reason) && memo.trim() && (!needsPeriod || period !== undefined);
   const needsDetail = kind === '출석인정' && reason && NEEDS_DETAIL.includes(reason);
 
   const draft = useMemo<AttendanceRecord | null>(() => {
@@ -264,10 +266,12 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
       startDate: date,
       endDate: date,
       periods: status === '결과' ? periods : undefined,
+      lateUntil: status === '지각' ? period : undefined,
+      leaveFrom: status === '조퇴' ? period : undefined,
       docs: rebuildDocs([], status!, kind!, kind === '출석인정' ? r : undefined),
       memo: memo.trim(),
     });
-  }, [ready, status, kind, reason, periods, memo, studentId, date]);
+  }, [ready, status, kind, reason, periods, period, memo, studentId, date]);
 
   const preview = useMemo(
     () =>
@@ -288,7 +292,14 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
       <RecordForm
         defaultStudentId={studentId}
         defaultDate={date}
-        prefill={{ status: status ?? undefined, kind: kind ?? undefined, reason: reason ?? undefined, memo: memo.trim() }}
+        prefill={{
+          status: status ?? undefined,
+          kind: kind ?? undefined,
+          reason: reason ?? undefined,
+          memo: memo.trim(),
+          lateUntil: status === '지각' ? period : undefined,
+          leaveFrom: status === '조퇴' ? period : undefined,
+        }}
         onClose={onClose}
       />
     );
@@ -308,7 +319,16 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
       )}
 
       <div className="quick">
-        <Choice label="상황" options={STATUSES} value={status} onChange={setStatus} />
+        <Choice
+          label="상황"
+          options={STATUSES}
+          value={status}
+          onChange={(s) => {
+            setStatus(s);
+            setPeriod(undefined);
+          }}
+        />
+        {(status === '지각' || status === '조퇴') && <PeriodPicker mode={status} value={period} onChange={setPeriod} />}
         <Choice
           label="종류"
           options={KINDS}
@@ -342,6 +362,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         </div>
 
         {status && kind && !memo.trim() && <p className="hint">상세 사유를 입력하면 저장할 수 있어요.</p>}
+        {needsPeriod && period === undefined && <p className="hint">{status} 교시를 고르면 저장할 수 있어요.</p>}
         {draft && !needsDetail && draft.docs.some((d) => d.required) && (
           <p className="info">받을 서류: {draft.docs.filter((d) => d.required).map((d) => d.label).join(', ')}</p>
         )}

@@ -65,6 +65,10 @@ export interface AttendanceRecord {
   endDate: DateStr;
   /** 결과일 때 해당 교시 */
   periods?: number[];
+  /** 지각: 몇 교시까지 빠졌는지 (0 = 조회만). 체험학습 마지막 날 오전까지도 여기에 */
+  lateUntil?: number;
+  /** 조퇴: 몇 교시부터 빠졌는지. 체험학습 첫날 오후부터도 여기에 */
+  leaveFrom?: number;
   illness?: IllnessInfo;
   fieldTrip?: FieldTripInfo;
   docs: DocItem[];
@@ -86,6 +90,8 @@ export interface Settings {
   /** 체험학습 연간 최대 일수 */
   fieldTripYearlyMax: number;
   lastBackupAt?: string;
+  /** 마지막으로 나이스 파일을 내보낸 기간의 끝 날짜 */
+  lastNeisExportTo?: DateStr;
 }
 
 export interface AppState {

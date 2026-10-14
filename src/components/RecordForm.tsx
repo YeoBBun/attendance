@@ -11,7 +11,7 @@ import {
 } from '../domain/rules';
 import { APPROVED_REASONS, KINDS, STATUSES, type AttendanceRecord, type DocItem } from '../domain/types';
 import { newId, useStore } from '../store';
-import { Modal, sortStudents } from './common';
+import { Modal, PeriodPicker, sortStudents } from './common';
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
@@ -35,6 +35,10 @@ export function clean(r: AttendanceRecord): AttendanceRecord {
   const out: AttendanceRecord = { ...r };
   if (out.status !== '결석') out.endDate = out.startDate;
   if (out.status !== '결과') delete out.periods;
+  // 지각·조퇴 교시. 여러 날 체험학습은 첫날 오후부터(조퇴)·마지막 날 오전까지(지각)에 쓴다.
+  const multiTrip = out.reason === '체험학습' && out.status === '결석' && out.startDate !== out.endDate;
+  if (!(out.status === '지각' || (multiTrip && out.fieldTrip?.endAM))) delete out.lateUntil;
+  if (!(out.status === '조퇴' || (multiTrip && out.fieldTrip?.startPM))) delete out.leaveFrom;
   if (out.kind !== '출석인정') delete out.reason;
   if (out.reason !== '법정감염병') delete out.illness;
   if (out.reason !== '체험학습') delete out.fieldTrip;
@@ -100,6 +104,11 @@ export function RecordForm({
     if (ids.length === 0 || !ids[0]) return setError('학생을 선택하세요.');
     if (draft.kind === '출석인정' && !draft.reason) return setError('출석인정 세부 사유를 선택하세요.');
     const isTripDraft = draft.kind === '출석인정' && draft.reason === '체험학습';
+    const c = clean(draft);
+    const needLate = c.status === '지각' || (c.status === '결석' && c.fieldTrip?.endAM && c.startDate !== c.endDate);
+    const needLeave = c.status === '조퇴' || (c.status === '결석' && c.fieldTrip?.startPM && c.startDate !== c.endDate);
+    if (needLate && c.lateUntil === undefined) return setError('지각 교시(몇 교시까지 빠졌는지)를 고르세요.');
+    if (needLeave && c.leaveFrom === undefined) return setError('조퇴 교시(몇 교시부터 빠졌는지)를 고르세요.');
     if (!isTripDraft && !draft.memo.trim()) return setError('상세 사유를 입력하세요 (예: 감기, 생리통).');
     const cleaned = clean(draft);
     update((s) => {
@@ -228,6 +237,16 @@ export function RecordForm({
           )}
         </section>
 
+        {(draft.status === '지각' || draft.status === '조퇴') && (
+          <section>
+            <PeriodPicker
+              mode={draft.status}
+              value={draft.status === '지각' ? draft.lateUntil : draft.leaveFrom}
+              onChange={(n) => set(draft.status === '지각' ? { lateUntil: n } : { leaveFrom: n })}
+            />
+          </section>
+        )}
+
         {draft.kind === '출석인정' && draft.reason === '법정감염병' && (
           <section className="row">
             <div>
@@ -302,6 +321,12 @@ export function RecordForm({
                   />
                   마지막 날은 오전까지 (인정지각, 0.5일)
                 </label>
+                {draft.fieldTrip?.startPM && (
+                  <PeriodPicker mode="조퇴" label="첫날 몇 교시부터?" value={draft.leaveFrom} onChange={(n) => set({ leaveFrom: n })} />
+                )}
+                {draft.fieldTrip?.endAM && (
+                  <PeriodPicker mode="지각" label="마지막 날 몇 교시까지?" value={draft.lateUntil} onChange={(n) => set({ lateUntil: n })} />
+                )}
               </div>
             ) : (
               <p className="hint">

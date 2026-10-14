@@ -73,7 +73,8 @@ export function normalize(raw: unknown): AppState {
 export function exportBackup(state: AppState): void {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-  downloadBlob(blob, `출결백업_${state.settings.className || '학급'}_${stamp}.json`);
+  // 파일 이름은 영문으로 (한글 이름을 무시하는 브라우저가 있다)
+  downloadBlob(blob, `attendance_backup_${stamp}.json`);
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -81,6 +82,9 @@ export function downloadBlob(blob: Blob, filename: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  // 문서에 붙여서 눌러야 일부 브라우저가 파일 이름을 지킨다. URL 은 다운로드가 시작된 뒤에 해제한다.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
