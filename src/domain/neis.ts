@@ -5,7 +5,7 @@ import type { AttendanceRecord, DateStr, Status, Student } from './types';
 /**
  * 나이스 자동 입력 키트(neis-automation-kit)에 넘길 파일.
  * 키트는 원래 구글 캘린더 일정 "번호 이름 분류 (교시)" 를 읽는데,
- * 같은 내용을 날짜별 한 줄씩 담는다. 연결 스크립트: public/neis-kit/app_to_neis.py
+ * 같은 내용을 날짜별 한 줄씩 담는다. 연결 스크립트: github.com/YeoBBun/neis-automation-kit 의 app_to_neis.py
  */
 export const NEIS_FILE_FORMAT = 'attendance-app/neis-v1';
 

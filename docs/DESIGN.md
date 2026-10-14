@@ -118,6 +118,7 @@ GitHub Actions(`.github/workflows/deploy.yml`)가 빌드한 `dist/` 를 GitHub P
 - 지각은 "몇 교시까지 빠졌는지"(조회만 포함), 조퇴는 "몇 교시부터 빠졌는지"를 필수로 입력한다. 체험학습 반일도 같다.
 - 「출결 기록 → 나이스 파일」: 기간을 골라 날짜별 한 줄짜리 파일(`attendance_neis_*.json`)을 만든다.
   결과와 교시 없는 지각·조퇴는 자동 입력을 못 하므로 따로 표시한다.
-- 학교 PC의 [neis-automation-kit](https://github.com/workcalmkite-hue/neis-automation-kit) 폴더에
-  `public/neis-kit/app_to_neis.py` 를 두면, 키트의 구글 캘린더 읽기 대신 이 파일을 읽어 나이스에 넣는다 (키트 코드는 고치지 않음).
-  사용법: `public/neis-kit/README.md` (배포 주소 `/neis-kit/README.md`)
+- 나이스 입력은 [YeoBBun/neis-automation-kit](https://github.com/YeoBBun/neis-automation-kit)
+  (방배중 안정연 선생님 키트의 포크)의 `app_to_neis.py` 가 다운로드 폴더의 파일을 읽어 키트의 `main.py` 로 넣는다.
+  키트의 구글 캘린더 읽기만 바꿔 끼우므로 원본 코드는 그대로이고, 구글 연동이 필요 없다. `/앱출결` 스킬로 실행.
+- 나이스는 PC에서만 접속되므로 **PC 웹(학교 PC 크롬)을 기본 사용 환경**으로 본다. 앱 데이터와 다운로드 파일, 키트가 한 PC에 있으면 파일을 옮길 필요가 없다.

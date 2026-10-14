@@ -4,7 +4,7 @@
 
 - 데이터는 브라우저 안(IndexedDB)에만 저장되고 외부로 전송되지 않습니다.
 - 다른 컴퓨터로 옮기거나 브라우저 데이터를 지우기 전에 **설정 → 백업**에서 백업 파일을 저장하세요.
-- 나이스 자동 입력 연결: [public/neis-kit/README.md](public/neis-kit/README.md)
+- 나이스 자동 입력: [YeoBBun/neis-automation-kit](https://github.com/YeoBBun/neis-automation-kit) (출결 앱 연동판 키트)
 
 ## 개발
 

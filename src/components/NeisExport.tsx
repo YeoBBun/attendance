@@ -8,7 +8,7 @@ import { Modal } from './common';
 /**
  * 나이스 자동 입력 키트에 넘길 파일을 만든다.
  * 파일 이름은 영문으로 한다 — 일부 브라우저가 한글 다운로드 이름을 'download' 로 바꿔 버린다.
- * 학교 PC로 옮긴 뒤 키트 폴더에서 app_to_neis.py 로 넣는다 (public/neis-kit/README.md 참고).
+ * 키트(github.com/YeoBBun/neis-automation-kit)의 app_to_neis.py 가 다운로드 폴더에서 읽어 나이스에 넣는다.
  */
 export function NeisExport({ onClose }: { onClose: () => void }) {
   const { state, update, holidays } = useStore();
@@ -73,7 +73,8 @@ export function NeisExport({ onClose }: { onClose: () => void }) {
         )}
 
         <p className="hint">
-          학생 번호·이름이 나이스와 똑같아야 들어가요. 파일에는 학생 이름과 출결이 들어 있으니 옮긴 뒤에는 지워 주세요.
+          저장한 뒤 키트 폴더의 클로드 앱에 <b>"앱 출결 나이스에 넣어줘"</b> 라고 하세요. 학생 번호·이름이 나이스와 똑같아야
+          들어가요. 다 넣은 뒤에는 파일을 지워 주세요 (학생 이름과 출결이 들어 있어요).
         </p>
 
         <footer className="form-actions">
