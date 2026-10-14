@@ -180,6 +180,8 @@ function exportCsv(rows: StudentSummary[], label: string) {
     '출석인정결석일수',
     '체험학습사용일수',
     '체험학습예정일수',
+    '체험학습국내(사용)',
+    '체험학습국외(사용)',
     '누락서류',
     '경고',
   ];
@@ -191,6 +193,8 @@ function exportCsv(rows: StudentSummary[], label: string) {
     r.approvedAbsenceDays,
     r.fieldTripDays,
     r.fieldTripPlanned,
+    r.fieldTripByPlace.국내.used,
+    r.fieldTripByPlace.국외.used,
     r.missingDocCount,
     r.warningCount,
   ]);

@@ -277,3 +277,13 @@ button.action + button.action { background: var(--surface); color: var(--primary
   .today { gap: 12px; }
   button.action { padding: 16px 8px; font-size: 16px; }
 }
+.overview { margin-bottom: 12px; }
+.overview h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.overview h3 .muted { font-size: 13px; font-weight: normal; }
+.overview-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.overview-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--border); }
+.overview-list li:first-child { border-top: none; }
+.overview-list .who { font-weight: 600; min-width: 80px; }
+.overview-list .total { margin-left: auto; font-size: 14px; }
+.overview-list li.over .total { color: var(--danger); }
+.section-title { font-size: 16px; margin: 16px 0 8px; }

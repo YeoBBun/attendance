@@ -14,6 +14,8 @@ export interface StudentSummary {
   fieldTripDays: number;
   /** 해당 학년도 체험학습 예정 일수 (내일부터) */
   fieldTripPlanned: number;
+  /** 체험학습 국내·국외별 사용·예정 일수 */
+  fieldTripByPlace: Record<'국내' | '국외', { used: number; planned: number }>;
   missingDocCount: number;
   warningCount: number;
 }
@@ -68,8 +70,14 @@ export function summarize(
       }
     }
     const trips = mine.filter((r) => r.startDate >= yearStart && r.startDate <= yearEnd);
-    const ft = trips.reduce((sum, r) => sum + fieldTripDays(r, holidays, undefined, today), 0);
-    const planned = trips.reduce((sum, r) => sum + fieldTripDays(r, holidays, tomorrow), 0);
+    const byPlace = { 국내: { used: 0, planned: 0 }, 국외: { used: 0, planned: 0 } };
+    for (const r of trips) {
+      const place = byPlace[r.fieldTrip?.abroad ? '국외' : '국내'];
+      place.used += fieldTripDays(r, holidays, undefined, today);
+      place.planned += fieldTripDays(r, holidays, tomorrow);
+    }
+    const ft = byPlace.국내.used + byPlace.국외.used;
+    const planned = byPlace.국내.planned + byPlace.국외.planned;
     return {
       student,
       counts,
@@ -77,6 +85,7 @@ export function summarize(
       approvedAbsenceDays: approved,
       fieldTripDays: ft,
       fieldTripPlanned: planned,
+      fieldTripByPlace: byPlace,
       missingDocCount: missing,
       warningCount: warn,
     };

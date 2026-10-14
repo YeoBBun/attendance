@@ -237,6 +237,7 @@ describe('체험학습 사전 입력', () => {
     const [s] = summarize([{ id: 's1', number: 1, name: '가' }], [r], hol, new Map(), '2026-03-01', '2027-02-28', '2026-10-14');
     expect(s.fieldTripDays).toBe(2);
     expect(s.fieldTripPlanned).toBe(2);
+    expect(s.fieldTripByPlace).toEqual({ 국내: { used: 2, planned: 2 }, 국외: { used: 0, planned: 0 } });
     expect(s.approvedAbsenceDays).toBe(2);
   });
 
