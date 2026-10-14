@@ -2,6 +2,7 @@ import {
   addDays,
   addSchoolDays,
   countSchoolDays,
+  isSchoolDay,
   formatKo,
   monthKey,
   rangesOverlap,
@@ -75,25 +76,48 @@ export function missingDocs(r: AttendanceRecord): DocItem[] {
 
 // ─── 일수 계산 ─────────────────────────────────────────────
 
-/** 결석 기록의 결석일수(수업일만). 범위를 주면 그 안에 든 날만 센다. */
+/** 여러 날 결석으로 기록된 체험학습에서 반일로 처리되는 날 (첫날 오후부터, 마지막 날 오전까지) */
+export function halfDays(r: AttendanceRecord): DateStr[] {
+  if (r.status !== '결석' || r.startDate === r.endDate || !r.fieldTrip) return [];
+  const days: DateStr[] = [];
+  if (r.fieldTrip.startPM) days.push(r.startDate);
+  if (r.fieldTrip.endAM) days.push(r.endDate);
+  return days;
+}
+
+/** 그날의 실제 출결 상황. 체험학습 첫날 오후부터는 조퇴, 마지막 날 오전까지는 지각. */
+export function statusOn(r: AttendanceRecord, date: DateStr): Status {
+  if (halfDays(r).includes(date)) return date === r.startDate ? '조퇴' : '지각';
+  return r.status;
+}
+
+function clip(r: AttendanceRecord, from?: DateStr, to?: DateStr): [DateStr, DateStr] {
+  return [from && from > r.startDate ? from : r.startDate, to && to < r.endDate ? to : r.endDate];
+}
+
+/** 범위 안에서 반일로 처리되는 수업일 */
+export function halfDaysIn(r: AttendanceRecord, holidays: HolidayIndex, from?: DateStr, to?: DateStr): DateStr[] {
+  const [start, end] = clip(r, from, to);
+  return halfDays(r).filter((d) => d >= start && d <= end && isSchoolDay(d, holidays));
+}
+
+/** 결석 기록의 결석일수(수업일만, 반일 제외). 범위를 주면 그 안에 든 날만 센다. */
 export function absenceDays(r: AttendanceRecord, holidays: HolidayIndex, from?: DateStr, to?: DateStr): number {
   if (r.status !== '결석') return 0;
-  const start = from && from > r.startDate ? from : r.startDate;
-  const end = to && to < r.endDate ? to : r.endDate;
+  const [start, end] = clip(r, from, to);
   if (start > end) return 0;
-  return countSchoolDays(start, end, holidays);
+  return countSchoolDays(start, end, holidays) - halfDaysIn(r, holidays, from, to).length;
 }
 
 /**
- * 체험학습 사용 일수. 결석은 수업일 수, 지각(오전)·조퇴(오후)는 반일 0.5일.
+ * 체험학습 사용 일수. 종일은 1일, 반일(오전·오후)은 0.5일. 예) 첫날 오후부터 + 다음 날 종일 = 1.5일
  * from/to 를 주면 그 안에 든 날만 센다 (사용·예정 구분용).
  */
 export function fieldTripDays(r: AttendanceRecord, holidays: HolidayIndex, from?: DateStr, to?: DateStr): number {
   if (r.kind !== '출석인정' || r.reason !== '체험학습') return 0;
-  const start = from && from > r.startDate ? from : r.startDate;
-  const end = to && to < r.endDate ? to : r.endDate;
+  const [start, end] = clip(r, from, to);
   if (start > end) return 0;
-  if (r.status === '결석') return countSchoolDays(start, end, holidays);
+  if (r.status === '결석') return countSchoolDays(start, end, holidays) - 0.5 * halfDaysIn(r, holidays, from, to).length;
   if (r.status === '지각' || r.status === '조퇴') return 0.5;
   return 0;
 }

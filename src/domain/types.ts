@@ -47,6 +47,10 @@ export interface IllnessInfo {
 export interface FieldTripInfo {
   abroad: boolean;
   guardianAccompanied: boolean;
+  /** 여러 날 체험학습에서 첫날은 오후부터 (첫날 인정조퇴, 0.5일) */
+  startPM?: boolean;
+  /** 여러 날 체험학습에서 마지막 날은 오전까지 (마지막 날 인정지각, 0.5일) */
+  endAM?: boolean;
 }
 
 export interface AttendanceRecord {

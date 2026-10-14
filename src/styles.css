@@ -243,3 +243,37 @@ button.big { padding: 10px 24px; font-size: 16px; }
 .day-summary li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; }
 .day-summary .who { font-weight: 600; min-width: 80px; }
 input.wide { width: 100%; }
+
+/* 첫 화면 단순화 */
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button.action {
+  padding: 18px 12px; font-size: 17px; font-weight: 700; border-radius: 12px;
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+button.action + button.action { background: var(--surface); color: var(--primary); }
+.row-btn {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%;
+  border: none; background: none; padding: 6px 0; text-align: left;
+}
+.warn-mark { color: var(--warn-text); }
+
+/* 모바일: 하단 탭, 전체 화면 입력창 */
+@media (max-width: 640px) {
+  .app { padding: 0 12px 84px; }
+  .top { padding: 10px 0; }
+  .top h1 { font-size: 16px; }
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav a { border-radius: 0; text-align: center; padding: 14px 0; font-size: 14px; }
+  nav a.on { background: var(--primary-soft); color: var(--primary); font-weight: 700; }
+  .modal-backdrop { padding: 0; }
+  .modal, .modal.wide { max-width: none; min-height: 100%; border-radius: 0; }
+  .modal-head { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  .banner { font-size: 13px; padding: 8px 10px; }
+  .today { gap: 12px; }
+  button.action { padding: 16px 8px; font-size: 16px; }
+}

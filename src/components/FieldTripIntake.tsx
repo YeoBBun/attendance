@@ -19,14 +19,15 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
   const [abroad, setAbroad] = useState(false);
   const [guardian, setGuardian] = useState(false);
   const [receivedDate, setReceivedDate] = useState(now);
-  const [memo, setMemo] = useState('');
+  const [startPM, setStartPM] = useState(false);
+  const [endAM, setEndAM] = useState(false);
 
   const endDate = end && end >= start ? end : start;
   const singleDay = start && endDate === start;
   const effectivePart: Part = singleDay ? part : '종일';
 
   const draft = useMemo<AttendanceRecord | null>(() => {
-    if (!studentId || !start || !memo.trim()) return null;
+    if (!studentId || !start) return null;
     const status = PART_STATUS[effectivePart];
     const docs = rebuildDocs([], status, '출석인정', '체험학습').map((d) =>
       d.key === DOC_FT_APPLICATION ? { ...d, received: true, receivedDate } : d,
@@ -39,11 +40,13 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
       reason: '체험학습',
       startDate: start,
       endDate: status === '결석' ? endDate : start,
-      fieldTrip: { abroad, guardianAccompanied: guardian },
+      fieldTrip: singleDay
+        ? { abroad, guardianAccompanied: guardian }
+        : { abroad, guardianAccompanied: guardian, startPM, endAM },
       docs,
-      memo: memo.trim(),
+      memo: '',
     };
-  }, [studentId, start, endDate, effectivePart, abroad, guardian, receivedDate, memo]);
+  }, [studentId, start, endDate, singleDay, effectivePart, abroad, guardian, receivedDate, startPM, endAM]);
 
   const preview = useMemo(() => {
     if (!draft) return null;
@@ -99,6 +102,38 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
+        {start && !singleDay && (
+          <section className="row">
+            <div>
+              <label className="field-label">첫날 ({formatKo(start)})</label>
+              <div className="big-seg">
+                <button className={!startPM ? 'on' : ''} onClick={() => setStartPM(false)}>
+                  종일
+                </button>
+                <button className={startPM ? 'on' : ''} onClick={() => setStartPM(true)}>
+                  오후부터 <small>(0.5일)</small>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="field-label">마지막 날 ({formatKo(endDate)})</label>
+              <div className="big-seg">
+                <button className={!endAM ? 'on' : ''} onClick={() => setEndAM(false)}>
+                  종일
+                </button>
+                <button className={endAM ? 'on' : ''} onClick={() => setEndAM(true)}>
+                  오전까지 <small>(0.5일)</small>
+                </button>
+              </div>
+            </div>
+            {(startPM || endAM) && (
+              <p className="hint">
+                {[startPM && '첫날은 인정조퇴', endAM && '마지막 날은 인정지각'].filter(Boolean).join(', ')}으로 기록됩니다.
+              </p>
+            )}
+          </section>
+        )}
+
         {singleDay && (
           <section>
             <label className="field-label">시간</label>
@@ -127,11 +162,6 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={guardian} onChange={(e) => setGuardian(e.target.checked)} />
             보호자 동반 확인
           </label>
-        </section>
-
-        <section>
-          <label className="field-label">체험 내용 (필수)</label>
-          <input className="wide" value={memo} placeholder="예: 가족여행(제주), 친척 결혼식 참석" onChange={(e) => setMemo(e.target.value)} />
         </section>
 
         <section>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { AttendanceRecord, Kind, Student } from '../domain/types';
 import { countSchoolDays, formatKo, type HolidayIndex } from '../domain/calendar';
+import { statusOn } from '../domain/rules';
 
 const modalStack: object[] = [];
 
@@ -41,7 +42,10 @@ export function kindClass(kind: Kind): string {
 export function recordTitle(r: AttendanceRecord): string {
   const kind = r.kind === '출석인정' && r.reason ? `인정(${r.reason})` : KIND_SHORT[r.kind];
   const periods = r.status === '결과' && r.periods?.length ? ` ${r.periods.join('·')}교시` : '';
-  return `${kind} ${r.status}${periods}`;
+  const halves = r.fieldTrip && r.status === '결석' && r.startDate !== r.endDate
+    ? [r.fieldTrip.startPM && '첫날 오후부터', r.fieldTrip.endAM && '마지막 날 오전까지'].filter(Boolean).join('·')
+    : '';
+  return `${kind} ${r.status}${periods}${halves ? ` (${halves})` : ''}`;
 }
 
 export function recordDates(r: AttendanceRecord): string {
@@ -62,14 +66,16 @@ export function sortStudents(students: Student[]): Student[] {
  */
 export function dayStatus(r: AttendanceRecord, date: string, holidays: HolidayIndex): { label: string; detail: string } {
   const kind = r.kind === '출석인정' ? '인정' : r.kind;
-  const periods = r.status === '결과' && r.periods?.length ? ` ${r.periods.join('·')}교시` : '';
+  const status = statusOn(r, date);
+  const periods = status === '결과' && r.periods?.length ? ` ${r.periods.join('·')}교시` : '';
   // 출석인정은 사유를 기본으로 보이고, 메모가 사유를 이미 담고 있으면(예: 생리통) 메모만 보인다.
   const memo = r.memo.trim();
   const parts = [r.reason && !memo.includes(r.reason) ? [r.reason, memo].filter(Boolean).join(', ') : memo];
   if (r.status === '결석' && r.startDate !== r.endDate) {
+    // 몇째 날인지 (반일 포함 수업일 기준)
     const total = countSchoolDays(r.startDate, r.endDate, holidays);
     const nth = countSchoolDays(r.startDate, date, holidays);
     if (total > 1) parts.push(`${nth}/${total}일차`);
   }
-  return { label: `${kind}${r.status}${periods}`, detail: parts.filter(Boolean).join(' ') };
+  return { label: `${kind}${status}${periods}`, detail: parts.filter(Boolean).join(' ') };
 }

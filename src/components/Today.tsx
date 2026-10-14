@@ -3,6 +3,7 @@ import { addDays, formatKo, isWeekend, today } from '../domain/calendar';
 import {
   applicationDeadline,
   computeWarnings,
+  statusOn,
   DOC_FT_APPLICATION,
   DOC_FT_REPORT,
   missingDocs,
@@ -20,7 +21,7 @@ import {
   type Status,
 } from '../domain/types';
 import { newId, useStore } from '../store';
-import { dayStatus, kindClass, KIND_SHORT, Modal, recordDates, recordTitle, sortStudents, studentLabel } from './common';
+import { dayStatus, kindClass, KIND_SHORT, Modal, sortStudents, studentLabel } from './common';
 import { FieldTripIntake } from './FieldTripIntake';
 import { clean, RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
@@ -36,12 +37,12 @@ function bigDate(d: string): string {
 }
 
 export function Today() {
-  const { state, holidays, warnings } = useStore();
+  const { state, holidays } = useStore();
   const [date, setDate] = useState(today);
+  const [picker, setPicker] = useState(false);
   const [entryFor, setEntryFor] = useState<string | null>(null);
   const [intake, setIntake] = useState(false);
   const now = today();
-  const students = sortStudents(state.students);
   const holiday = holidays.get(date);
 
   const todays = useMemo(() => {
@@ -56,8 +57,6 @@ export function Today() {
     return map;
   }, [state.records, date]);
 
-  const warningCount = useMemo(() => [...warnings.values()].reduce((n, w) => n + w.length, 0), [warnings]);
-
   return (
     <div className="today">
       <header className="today-head">
@@ -71,82 +70,118 @@ export function Today() {
           ) : isWeekend(date) ? (
             <p className="muted">주말</p>
           ) : (
-            date !== now && <p className="muted">오늘이 아닌 날짜를 보고 있어요</p>
+            date !== now && (
+              <button className="link" onClick={() => setDate(now)}>
+                오늘로 돌아가기
+              </button>
+            )
           )}
         </div>
         <button className="ghost" onClick={() => setDate(addDays(date, 1))} aria-label="다음날">
           ▶
         </button>
-        {date !== now && (
-          <button className="small" onClick={() => setDate(now)}>
-            오늘로
-          </button>
-        )}
       </header>
 
-      {students.length > 0 && <DaySummary date={date} records={todays} />}
-
-      {students.length === 0 ? (
+      {state.students.length === 0 ? (
         <p className="empty">
           먼저 <a href="#settings">설정</a>에서 학생 명단을 등록하세요.
         </p>
       ) : (
-        <section className="card">
-          <h3>
-            출결 입력 <span className="muted">학생을 누르세요 · {todays.size ? `${todays.size}명 기록됨` : '모두 출석'}</span>
-            <span className="spacer" />
-            <button className="small" onClick={() => setIntake(true)}>
-              + 체험학습 신청 접수
+        <>
+          <DaySummary date={date} records={todays} onOpen={setEntryFor} />
+          <div className="actions">
+            <button className="action" onClick={() => setPicker(true)}>
+              출결 입력
             </button>
-          </h3>
-          <div className="student-grid">
-            {students.map((s) => {
-              const recs = todays.get(s.id) ?? [];
-              return (
-                <button key={s.id} className={`student-btn${recs.length ? ' has' : ''}`} onClick={() => setEntryFor(s.id)}>
-                  <span className="num">{s.number}</span>
-                  <span className="nm">{s.name}</span>
-                  {recs.map((r) => (
-                    <span key={r.id} className={`tag ${kindClass(r.kind)}`}>
-                      {r.kind === '출석인정' && r.reason ? r.reason : KIND_SHORT[r.kind]} {r.status}
-                    </span>
-                  ))}
-                </button>
-              );
-            })}
+            <button className="action" onClick={() => setIntake(true)}>
+              체험학습 신청 접수
+            </button>
           </div>
-        </section>
+        </>
       )}
 
       <PendingDocs />
 
-      {warningCount > 0 && (
-        <p className="banner">
-          ⚠ 규칙 확인이 필요한 기록이 {warningCount}건 있어요. <a href="#records">기록 탭</a>에서 "경고"를 눌러 확인하세요.
-        </p>
-      )}
-
+      {picker && <StudentPicker date={date} records={todays} onPick={setEntryFor} onClose={() => setPicker(false)} />}
       {intake && <FieldTripIntake onClose={() => setIntake(false)} />}
       {entryFor && <QuickEntry studentId={entryFor} date={date} onClose={() => setEntryFor(null)} />}
     </div>
   );
 }
 
-/** 그날 출결 현황을 "1. 김철수 : 질병결석 (감기)" 형식으로 보여준다. */
-function DaySummary({ date, records }: { date: string; records: Map<string, AttendanceRecord[]> }) {
-  const { state, holidays } = useStore();
+/** 출결 입력: 학생 명단에서 학생을 고른다. 입력을 마치면 명단으로 돌아와 이어서 입력할 수 있다. */
+function StudentPicker({
+  date,
+  records,
+  onPick,
+  onClose,
+}: {
+  date: string;
+  records: Map<string, AttendanceRecord[]>;
+  onPick: (studentId: string) => void;
+  onClose: () => void;
+}) {
+  const { state } = useStore();
+  return (
+    <Modal title={`출결 입력 · ${formatKo(date)}`} onClose={onClose}>
+      <p className="hint">학생을 누르세요.</p>
+      <div className="student-grid">
+        {sortStudents(state.students).map((s) => {
+          const recs = records.get(s.id) ?? [];
+          return (
+            <button key={s.id} className={`student-btn${recs.length ? ' has' : ''}`} onClick={() => onPick(s.id)}>
+              <span className="num">{s.number}</span>
+              <span className="nm">{s.name}</span>
+              {recs.map((r) => (
+                <span key={r.id} className={`tag ${kindClass(r.kind)}`}>
+                  {r.kind === '출석인정' && r.reason ? r.reason : KIND_SHORT[r.kind]} {statusOn(r, date)}
+                </span>
+              ))}
+            </button>
+          );
+        })}
+      </div>
+      <footer className="form-actions">
+        <span className="spacer" />
+        <button className="primary big" onClick={onClose}>
+          완료
+        </button>
+      </footer>
+    </Modal>
+  );
+}
+
+/** 그날 출결 현황을 "1. 김철수 : 질병결석 (감기)" 형식으로 보여준다. 줄을 누르면 그 학생 기록을 연다. */
+function DaySummary({
+  date,
+  records,
+  onOpen,
+}: {
+  date: string;
+  records: Map<string, AttendanceRecord[]>;
+  onOpen: (studentId: string) => void;
+}) {
+  const { state, holidays, warnings } = useStore();
   const [copied, setCopied] = useState(false);
   const isToday = date === today();
 
   const lines = sortStudents(state.students).flatMap((s) =>
     (records.get(s.id) ?? []).map((r) => {
       const { label, detail } = dayStatus(r, date, holidays);
-      return { key: r.id, record: r, text: `${s.number}. ${s.name} : ${label}${detail ? ` (${detail})` : ''}`, name: `${s.number}. ${s.name}`, label, detail };
+      return {
+        key: r.id,
+        record: r,
+        studentId: s.id,
+        name: `${s.number}. ${s.name}`,
+        text: `${s.number}. ${s.name} : ${label}${detail ? ` (${detail})` : ''}`,
+        label,
+        detail,
+        warn: warnings.get(r.id),
+      };
     }),
   );
-  const counts = STATUSES.map((st) => [st, [...records.values()].flat().filter((r) => r.status === st).length] as const).filter(
-    ([, n]) => n > 0,
-  );
+  const all = [...records.values()].flat();
+  const counts = STATUSES.map((st) => [st, all.filter((r) => statusOn(r, date) === st).length] as const).filter(([, n]) => n > 0);
 
   const copy = async () => {
     const text = [`${formatKo(date)} 출결`, ...lines.map((l) => l.text)].join('\n');
@@ -169,7 +204,7 @@ function DaySummary({ date, records }: { date: string; records: Map<string, Atte
     <section className="card">
       <h3>
         {isToday ? '오늘' : formatKo(date)} 출결 현황
-        <span className="muted">{counts.length ? counts.map(([st, n]) => `${st} ${n}`).join(' · ') : '모두 출석'}</span>
+        <span className="muted">{counts.length ? counts.map(([st, n]) => `${st} ${n}`).join(' · ') : ''}</span>
         <span className="spacer" />
         {lines.length > 0 && (
           <button className="small" onClick={copy}>
@@ -178,14 +213,21 @@ function DaySummary({ date, records }: { date: string; records: Map<string, Atte
         )}
       </h3>
       {lines.length === 0 ? (
-        <p className="muted">결석·지각·조퇴·결과가 없어요.</p>
+        <p className="muted">모두 출석이에요.</p>
       ) : (
         <ul className="day-summary">
           {lines.map((l) => (
             <li key={l.key}>
-              <span className="who">{l.name}</span>
-              <span className={`tag ${kindClass(l.record.kind)}`}>{l.label}</span>
-              {l.detail && <span className="muted">({l.detail})</span>}
+              <button className="row-btn" onClick={() => onOpen(l.studentId)}>
+                <span className="who">{l.name}</span>
+                <span className={`tag ${kindClass(l.record.kind)}`}>{l.label}</span>
+                {l.detail && <span className="muted">({l.detail})</span>}
+                {l.warn && (
+                  <span className="warn-mark" title={l.warn.join('\n')}>
+                    ⚠
+                  </span>
+                )}
+              </button>
             </li>
           ))}
         </ul>
@@ -357,6 +399,12 @@ function Choice<T extends string>({
   );
 }
 
+/** 서류 목록용 짧은 표기. 예: 질병결석, 생리 조퇴, 체험학습 */
+function shortTitle(r: AttendanceRecord): string {
+  if (r.kind !== '출석인정' || !r.reason) return `${KIND_SHORT[r.kind]}${r.status}`;
+  return r.reason === '체험학습' ? '체험학습' : `${r.reason} ${r.status}`;
+}
+
 interface PendingRow {
   record: AttendanceRecord;
   doc: DocItem;
@@ -414,8 +462,8 @@ function PendingDocs() {
                 <b>{doc.label}</b>
                 <span className="muted">
                   {' '}
-                  · {recordDates(record)} {recordTitle(record)}
-                  {doc.key === DOC_FT_REPORT && now <= record.endDate && ' · 다녀온 후 제출'}
+                  · {formatKo(record.startDate)} {shortTitle(record)}
+                  {doc.key === DOC_FT_REPORT && now <= record.endDate && ' · 다녀온 후'}
                   {deadline && ` · 기한 ${formatKo(deadline)}`}
                 </span>
               </span>

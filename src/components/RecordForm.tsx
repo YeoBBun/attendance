@@ -38,6 +38,10 @@ export function clean(r: AttendanceRecord): AttendanceRecord {
   if (out.kind !== '출석인정') delete out.reason;
   if (out.reason !== '법정감염병') delete out.illness;
   if (out.reason !== '체험학습') delete out.fieldTrip;
+  else if (out.fieldTrip && (out.status !== '결석' || out.startDate === out.endDate)) {
+    const { startPM: _s, endAM: _e, ...rest } = out.fieldTrip;
+    out.fieldTrip = rest;
+  }
   return out;
 }
 
@@ -95,7 +99,8 @@ export function RecordForm({
     const ids = isNew ? selected : [draft.studentId];
     if (ids.length === 0 || !ids[0]) return setError('학생을 선택하세요.');
     if (draft.kind === '출석인정' && !draft.reason) return setError('출석인정 세부 사유를 선택하세요.');
-    if (!draft.memo.trim()) return setError('상세 사유를 입력하세요 (예: 감기, 생리통).');
+    const isTripDraft = draft.kind === '출석인정' && draft.reason === '체험학습';
+    if (!isTripDraft && !draft.memo.trim()) return setError('상세 사유를 입력하세요 (예: 감기, 생리통).');
     const cleaned = clean(draft);
     update((s) => {
       if (!isNew) return { ...s, records: s.records.map((r) => (r.id === cleaned.id ? cleaned : r)) };
@@ -275,9 +280,34 @@ export function RecordForm({
                 보호자 동반
               </label>
             </div>
-            <p className="hint">
-              반일(0.5일)은 상황을 <b>지각</b>(오전) 또는 <b>조퇴</b>(오후)로 선택하세요.
-            </p>
+            {draft.status === '결석' && draft.endDate > draft.startDate ? (
+              <div className="row">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={draft.fieldTrip?.startPM ?? false}
+                    onChange={(e) =>
+                      set({ fieldTrip: { abroad: false, guardianAccompanied: false, ...draft.fieldTrip, startPM: e.target.checked } })
+                    }
+                  />
+                  첫날은 오후부터 (인정조퇴, 0.5일)
+                </label>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={draft.fieldTrip?.endAM ?? false}
+                    onChange={(e) =>
+                      set({ fieldTrip: { abroad: false, guardianAccompanied: false, ...draft.fieldTrip, endAM: e.target.checked } })
+                    }
+                  />
+                  마지막 날은 오전까지 (인정지각, 0.5일)
+                </label>
+              </div>
+            ) : (
+              <p className="hint">
+                하루 중 반일(0.5일)은 상황을 <b>지각</b>(오전) 또는 <b>조퇴</b>(오후)로 선택하세요.
+              </p>
+            )}
             {preview && (
               <p className="info">
                 이번 사용 {fieldTripDays(preview.rec, holidays)}일 · 학년도 누적 {preview.cumulative}/
@@ -347,7 +377,7 @@ export function RecordForm({
         </section>
 
         <section>
-          <label className="field-label">상세 사유 (필수)</label>
+          <label className="field-label">상세 사유{isTrip ? ' (선택)' : ' (필수)'}</label>
           <textarea rows={2} value={draft.memo} placeholder="예: 감기, 생리통, 가족여행(제주)" onChange={(e) => set({ memo: e.target.value })} />
         </section>
 

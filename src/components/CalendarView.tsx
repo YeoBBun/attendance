@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { addDays, dayOfWeek, formatKo, isSchoolDay, isWeekend, monthKey, today } from '../domain/calendar';
+import { statusOn } from '../domain/rules';
 import type { AttendanceRecord, HolidayType } from '../domain/types';
 import { useStore } from '../store';
 import { kindClass, KIND_SHORT, Modal } from './common';
@@ -80,7 +81,7 @@ export function CalendarView() {
               {holiday && <span className={`holiday ${holiday.type === '재량휴업일' ? 'disc' : ''}`}>{holiday.name}</span>}
               {recs.slice(0, 4).map((r) => (
                 <span key={r.id} className={`cal-rec ${kindClass(r.kind)}`}>
-                  {studentName(r.studentId)} {r.kind === '출석인정' && r.reason ? r.reason : KIND_SHORT[r.kind]} {r.status}
+                  {studentName(r.studentId)} {r.kind === '출석인정' && r.reason ? r.reason : KIND_SHORT[r.kind]} {statusOn(r, d)}
                 </span>
               ))}
               {recs.length > 4 && <span className="more">+{recs.length - 4}</span>}

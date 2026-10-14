@@ -1,5 +1,5 @@
 import { addDays, schoolYearOf, schoolYearRange, type HolidayIndex } from './calendar';
-import { absenceDays, fieldTripDays, missingDocs } from './rules';
+import { absenceDays, fieldTripDays, halfDaysIn, missingDocs, statusOn } from './rules';
 import { KINDS, STATUSES, type AttendanceRecord, type DateStr, type Kind, type Status, type Student } from './types';
 
 export interface StudentSummary {
@@ -61,6 +61,8 @@ export function summarize(
         counts[r.status][r.kind] += days;
         if (r.kind === '출석인정') approved += days;
         else absence += days;
+        // 체험학습 첫날 오후부터·마지막 날 오전까지는 조퇴·지각 1회로 센다.
+        for (const d of halfDaysIn(r, holidays, from, countTo)) counts[statusOn(r, d)][r.kind] += 1;
       } else {
         counts[r.status][r.kind] += 1;
       }

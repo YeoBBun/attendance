@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { addSchoolDays, countSchoolDays, dayOfWeek, indexHolidays, schoolYearRange } from './calendar';
-import { computeWarnings, DOC_FT_APPLICATION, DOC_FT_REPORT, fieldTripCumulative, missingDocs, rebuildDocs } from './rules';
+import {
+  computeWarnings,
+  DOC_FT_APPLICATION,
+  DOC_FT_REPORT,
+  fieldTripCumulative,
+  fieldTripDays,
+  missingDocs,
+  rebuildDocs,
+  statusOn,
+} from './rules';
 import { PUBLIC_HOLIDAYS } from './publicHolidays';
 import { summarize } from './stats';
 import { DEFAULT_SETTINGS, type AttendanceRecord, type Holiday } from './types';
@@ -242,5 +251,33 @@ describe('체험학습 사전 입력', () => {
     const late = trip({ id: 'l', startDate: '2026-10-19' });
     late.docs = late.docs.map((d) => (d.key === DOC_FT_APPLICATION ? { ...d, received: true, receivedDate: '2026-10-16' } : d));
     expect(warningsFor([late], '2026-10-16').get('l')?.[0]).toContain('미인정 처리 대상');
+  });
+});
+
+describe('체험학습 1.5일·2.5일', () => {
+  const trip = (p: Partial<AttendanceRecord>) =>
+    rec({ kind: '출석인정', reason: '체험학습', status: '결석', ...p });
+
+  it('첫날 오후부터 + 다음 날 종일 = 1.5일, 첫날은 인정조퇴', () => {
+    const r = trip({ startDate: '2026-10-15', endDate: '2026-10-16', fieldTrip: { abroad: false, guardianAccompanied: true, startPM: true } });
+    expect(fieldTripDays(r, hol)).toBe(1.5);
+    expect(statusOn(r, '2026-10-15')).toBe('조퇴');
+    expect(statusOn(r, '2026-10-16')).toBe('결석');
+    const [s] = summarize([{ id: 's1', number: 1, name: '가' }], [r], hol, new Map(), '2026-03-01', '2027-02-28', '2026-12-31');
+    expect(s.counts['결석']['출석인정']).toBe(1);
+    expect(s.counts['조퇴']['출석인정']).toBe(1);
+    expect(s.approvedAbsenceDays).toBe(1);
+  });
+
+  it('첫날 오후부터 ~ 마지막 날 오전까지, 사이 이틀 종일 = 3일', () => {
+    // 10/13(화) 오후 ~ 10/16(금) 오전
+    const r = trip({ startDate: '2026-10-13', endDate: '2026-10-16', fieldTrip: { abroad: false, guardianAccompanied: true, startPM: true, endAM: true } });
+    expect(fieldTripDays(r, hol)).toBe(3);
+    expect(statusOn(r, '2026-10-16')).toBe('지각');
+  });
+
+  it('하루짜리 기록에서는 반일 표시를 무시한다', () => {
+    const r = trip({ startDate: '2026-10-15', fieldTrip: { abroad: false, guardianAccompanied: true, startPM: true } });
+    expect(fieldTripDays(r, hol)).toBe(1);
   });
 });
