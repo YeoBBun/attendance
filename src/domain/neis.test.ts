@@ -24,6 +24,25 @@ describe('나이스 내보내기', () => {
     expect(f.records[0]).toMatchObject({ number: 7, name: '박지우', att_type: '질병결석', note: '' });
   });
 
+  it('상세 사유를 memo 로 담고, 비었으면 출석인정 사유로 대신한다', () => {
+    const f = buildNeisFile(
+      students,
+      [
+        rec({ memo: ' 감기 ' }),
+        rec({ studentId: 'b', kind: '출석인정', reason: '체험학습' }),
+        rec({ startDate: '2026-10-14' }),
+      ],
+      hol,
+      '2026-10-01',
+      '2026-10-31',
+    );
+    expect(f.records.map((r) => [r.date, r.number, r.memo])).toEqual([
+      ['2026-10-13', 2, '체험학습'],
+      ['2026-10-13', 7, '감기'],
+      ['2026-10-14', 7, ''],
+    ]);
+  });
+
   it('지각·조퇴는 키트 교시 표기로', () => {
     const f = buildNeisFile(
       students,
