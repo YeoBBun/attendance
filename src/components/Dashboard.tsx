@@ -16,6 +16,7 @@ export function Dashboard() {
   const [year, setYear] = useState(() => schoolYearOf(today()));
   const [month, setMonth] = useState<number | 'all'>('all');
   const [detail, setDetail] = useState<string | null>(null);
+  const [breakdown, setBreakdown] = useState(false);
 
   const [from, to] = useMemo(() => {
     if (month === 'all') return schoolYearRange(year);
@@ -39,9 +40,13 @@ export function Dashboard() {
     return <p className="empty">설정 탭에서 학생 명단을 먼저 등록하세요.</p>;
   }
 
+  const total = (r: StudentSummary, st: (typeof STATUSES)[number]) => KINDS.reduce((n, k) => n + r.counts[st][k], 0);
+  const classTotals = STATUSES.map((st) => [st, rows.reduce((n, r) => n + total(r, st), 0)] as const);
+  const missing = rows.reduce((n, r) => n + r.missingDocCount, 0);
+
   return (
-    <div>
-      <div className="toolbar">
+    <div className="stats-page">
+      <div className="page-head">
         <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
           {years.map((y) => (
             <option key={y} value={y}>
@@ -57,8 +62,28 @@ export function Dashboard() {
             </option>
           ))}
         </select>
+        <label className="check">
+          <input type="checkbox" checked={breakdown} onChange={(e) => setBreakdown(e.target.checked)} />
+          종류별로 나눠 보기
+        </label>
         <span className="spacer" />
         <button onClick={() => exportCsv(rows, `${year}${month === 'all' ? '' : `_${String(month).padStart(2, '0')}`}`)}>엑셀(CSV) 내보내기</button>
+      </div>
+
+      <div className="kpis">
+        {classTotals.map(([st, n]) => (
+          <div key={st} className="kpi">
+            <span className="kpi-label">
+              {st}
+              {st === '결석' ? '(일)' : '(회)'}
+            </span>
+            <b>{n}</b>
+          </div>
+        ))}
+        <div className={`kpi${missing ? ' bad' : ''}`}>
+          <span className="kpi-label">누락 서류</span>
+          <b>{missing}</b>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -68,7 +93,7 @@ export function Dashboard() {
               <th rowSpan={2}>번호</th>
               <th rowSpan={2}>이름</th>
               {STATUSES.map((s) => (
-                <th key={s} colSpan={4} className="group">
+                <th key={s} colSpan={breakdown ? 4 : 1} rowSpan={breakdown ? 1 : 2} className="group">
                   {s}
                   {s === '결석' ? '(일)' : '(회)'}
                 </th>
@@ -84,7 +109,7 @@ export function Dashboard() {
               <th rowSpan={2}>경고</th>
             </tr>
             <tr>
-              {STATUSES.map((s) =>
+              {breakdown && STATUSES.map((s) =>
                 KINDS.map((k) => (
                   <th key={s + k} className={k === '기타' ? 'sub group-end' : 'sub'}>
                     {KIND_SHORT[k]}
@@ -98,13 +123,19 @@ export function Dashboard() {
               <tr key={r.student.id} onClick={() => setDetail(r.student.id)} className="clickable">
                 <td>{r.student.number}</td>
                 <td className="name">{r.student.name}</td>
-                {STATUSES.map((s) =>
-                  KINDS.map((k) => (
-                    <td key={s + k} className={`num${k === '기타' ? ' group-end' : ''}`}>
-                      {r.counts[s][k] || ''}
-                    </td>
-                  )),
-                )}
+                {breakdown
+                  ? STATUSES.map((s) =>
+                      KINDS.map((k) => (
+                        <td key={s + k} className={`num${k === '기타' ? ' group-end' : ''}`}>
+                          {r.counts[s][k] || ''}
+                        </td>
+                      )),
+                    )
+                  : STATUSES.map((s) => (
+                      <td key={s} className="num group-end">
+                        {total(r, s) || ''}
+                      </td>
+                    ))}
                 <td className="num strong">{r.absenceDays || ''}</td>
                 <td className="num">{r.approvedAbsenceDays || ''}</td>
                 <td
@@ -126,6 +157,8 @@ export function Dashboard() {
         총결석 = 질병·미인정·기타 결석일수 (출석인정 제외). 결석일수는 주말·공휴일·재량휴업일을 뺀 수업일 기준입니다. 체험학습은 학년도
         누적이고, "5+3"은 사용 5일·예정 3일입니다. 출결 통계는 오늘까지만 셉니다.
       </p>
+
+      <TripTotals studentId="" />
 
       {detail && <StudentDetail studentId={detail} from={from} to={to} onClose={() => setDetail(null)} />}
     </div>
@@ -201,4 +234,52 @@ function exportCsv(rows: StudentSummary[], label: string) {
   const csv = [header, ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   // BOM 을 붙여야 엑셀에서 한글이 깨지지 않는다.
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `attendance_summary_${label}.csv`);
+}
+
+/** 체험학습 누계 (학년도): 국내·국외별 사용 일수와 예정 일수 */
+function TripTotals({ studentId }: { studentId: string }) {
+  const { state, holidays, warnings } = useStore();
+  const year = schoolYearOf(today());
+  const [from, to] = schoolYearRange(year);
+  const max = state.settings.fieldTripYearlyMax;
+  const rows = useMemo(() => {
+    const students = sortStudents(state.students).filter((s) => !studentId || s.id === studentId);
+    return summarize(students, state.records, holidays, warnings, from, to, today()).filter(
+      (r) => r.fieldTripDays + r.fieldTripPlanned > 0,
+    );
+  }, [state.students, state.records, holidays, warnings, from, to, studentId]);
+
+  const place = (label: '국내' | '국외', r: StudentSummary) => {
+    const p = r.fieldTripByPlace[label];
+    if (!p.used && !p.planned) return null;
+    return `${label} ${p.used}일${p.planned ? `(+예정 ${p.planned})` : ''}`;
+  };
+
+  return (
+    <section className="card overview">
+      <h3>
+        체험학습 누계 <span className="muted">{year}학년도 · 연간 {max}일</span>
+      </h3>
+      {rows.length === 0 ? (
+        <p className="muted">체험학습 기록이 없어요.</p>
+      ) : (
+        <ul className="overview-list">
+          {rows.map((r) => {
+            const total = r.fieldTripDays + r.fieldTripPlanned;
+            return (
+              <li key={r.student.id} className={total > max ? 'over' : ''}>
+                <span className="who">
+                  {r.student.number}. {r.student.name}
+                </span>
+                <span>{[place('국내', r), place('국외', r)].filter(Boolean).join(' · ')}</span>
+                <b className="total">
+                  {total}/{max}일 · 남은 {max - total}일
+                </b>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
 }

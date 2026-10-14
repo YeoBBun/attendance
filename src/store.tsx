@@ -71,3 +71,12 @@ export function newId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
+
+export const BACKUP_REMIND_DAYS = 7;
+
+/** 기록이 있는데 마지막 백업 후 BACKUP_REMIND_DAYS 일이 지났는가 */
+export function useNeedBackup(): boolean {
+  const { state } = useStore();
+  const last = state.settings.lastBackupAt ? Date.parse(state.settings.lastBackupAt) : 0;
+  return state.records.length > 0 && Date.now() - last > BACKUP_REMIND_DAYS * 86_400_000;
+}

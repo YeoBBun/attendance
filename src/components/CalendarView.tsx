@@ -6,6 +6,7 @@ import { useStore } from '../store';
 import { kindClass, KIND_SHORT, Modal } from './common';
 import { RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
+import { Icon } from './icons';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -48,13 +49,19 @@ export function CalendarView() {
   return (
     <div>
       <div className="toolbar">
-        <button onClick={() => shift(-1)}>◀</button>
+        <button className="icon-btn" onClick={() => shift(-1)} aria-label="이전 달">
+          <Icon name="left" />
+        </button>
         <strong className="month-title">
           {month.slice(0, 4)}년 {Number(month.slice(5))}월
         </strong>
-        <button onClick={() => shift(1)}>▶</button>
-        <button onClick={() => setMonth(monthKey(now))}>오늘</button>
-        <span className="hint">날짜를 누르면 출결 추가·재량휴업일 지정을 할 수 있습니다.</span>
+        <button className="icon-btn" onClick={() => shift(1)} aria-label="다음 달">
+          <Icon name="right" />
+        </button>
+        <button className="pill" onClick={() => setMonth(monthKey(now))}>
+          이번 달
+        </button>
+        <span className="hint">날짜를 누르면 출결 추가·재량휴업일 지정을 할 수 있어요.</span>
       </div>
       <div className="calendar">
         {WEEK.map((w, i) => (
