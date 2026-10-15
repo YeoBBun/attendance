@@ -5,6 +5,7 @@ import {
   computeWarnings,
   statusOn,
   DOC_FT_APPLICATION,
+  DOC_FT_EVIDENCE,
   DOC_FT_REPORT,
   missingDocs,
   rebuildDocs,
@@ -16,12 +17,14 @@ import {
   STATUSES,
   type ApprovedReason,
   type AttendanceRecord,
+  FAMILY_EVENTS,
   type DocItem,
+  type FamilyEvent,
   type Kind,
   type Status,
 } from '../domain/types';
 import { newId, useStore } from '../store';
-import { dayStatus, kindClass, KIND_SHORT, Modal, PeriodPicker, sortStudents, studentLabel } from './common';
+import { dayStatus, kindClass, KIND_SHORT, KindGuide, Modal, PeriodPicker, recordDates, sortStudents, studentLabel } from './common';
 import { FieldTripIntake } from './FieldTripIntake';
 import { clean, RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
@@ -161,7 +164,7 @@ function DaySummary({
   records: Map<string, AttendanceRecord[]>;
   onOpen: (studentId: string) => void;
 }) {
-  const { state, holidays, warnings } = useStore();
+  const { state, holidays, warnings, removeRecord } = useStore();
   const [copied, setCopied] = useState(false);
   const isToday = date === today();
 
@@ -228,6 +231,18 @@ function DaySummary({
                   </span>
                 )}
               </button>
+              <button
+                className="del-btn"
+                aria-label="삭제"
+                onClick={() =>
+                  removeRecord(
+                    l.record.id,
+                    `${l.name} ${l.record.startDate === l.record.endDate ? '' : `${recordDates(l.record)} `}${l.label}`,
+                  )
+                }
+              >
+                삭제
+              </button>
             </li>
           ))}
         </ul>
@@ -238,13 +253,14 @@ function DaySummary({
 
 /** 학생 한 명의 그날 출결을 몇 번의 터치로 입력한다. */
 function QuickEntry({ studentId, date, onClose }: { studentId: string; date: string; onClose: () => void }) {
-  const { state, update, holidays } = useStore();
+  const { state, update, holidays, docContext } = useStore();
   const [status, setStatus] = useState<Status | null>(null);
   const [kind, setKind] = useState<Kind | null>(null);
   const [reason, setReason] = useState<ApprovedReason | null>(null);
   const [periods, setPeriods] = useState<number[]>([]);
   const [memo, setMemo] = useState('');
   const [period, setPeriod] = useState<number | undefined>(undefined);
+  const [familyEvent, setFamilyEvent] = useState<FamilyEvent | null>(null);
   const [editing, setEditing] = useState<AttendanceRecord | null>(null);
   const [detail, setDetail] = useState(false);
   const student = state.students.find((s) => s.id === studentId);
@@ -257,7 +273,8 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
     (kind !== '출석인정' || reason) &&
     memo.trim() &&
     (!needsPeriod || period !== undefined) &&
-    (status !== '결과' || periods.length > 0);
+    (status !== '결과' || periods.length > 0) &&
+    (reason !== '경조사' || kind !== '출석인정' || familyEvent);
   const needsDetail = kind === '출석인정' && reason && NEEDS_DETAIL.includes(reason);
 
   const draft = useMemo<AttendanceRecord | null>(() => {
@@ -274,10 +291,11 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
       periods: status === '결과' ? periods : undefined,
       lateUntil: status === '지각' ? period : undefined,
       leaveFrom: status === '조퇴' ? period : undefined,
-      docs: rebuildDocs([], status!, kind!, kind === '출석인정' ? r : undefined),
+      familyEvent: kind === '출석인정' && reason === '경조사' ? familyEvent ?? undefined : undefined,
+      docs: rebuildDocs([], { status: status!, kind: kind!, reason: kind === '출석인정' ? r : undefined, startDate: date, endDate: date }, docContext),
       memo: memo.trim(),
     });
-  }, [ready, status, kind, reason, periods, period, memo, studentId, date]);
+  }, [ready, status, kind, reason, periods, period, memo, familyEvent, studentId, date, docContext]);
 
   const preview = useMemo(
     () =>
@@ -303,6 +321,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
           kind: kind ?? undefined,
           reason: reason ?? undefined,
           memo: memo.trim(),
+          familyEvent: familyEvent ?? undefined,
           periods: status === '결과' ? periods : undefined,
           lateUntil: status === '지각' ? period : undefined,
           leaveFrom: status === '조퇴' ? period : undefined,
@@ -362,6 +381,10 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
           }}
         />
         {kind === '출석인정' && <Choice label="사유" options={APPROVED_REASONS} value={reason} onChange={setReason} />}
+        {kind === '출석인정' && reason === '경조사' && (
+          <Choice label="경조사 종류" options={FAMILY_EVENTS.map((e) => e.key)} value={familyEvent} onChange={setFamilyEvent} />
+        )}
+        {kind && <KindGuide kind={kind} status={status} />}
 
         <div>
           <span className="field-label">상세 사유 (필수)</span>
@@ -453,7 +476,7 @@ function PendingDocs() {
       for (const doc of missingDocs(record)) {
         let deadline: string | undefined;
         if (doc.key === DOC_FT_APPLICATION) deadline = applicationDeadline(record, state.settings, holidays);
-        if (doc.key === DOC_FT_REPORT) deadline = reportDeadline(record, state.settings, holidays);
+        if (doc.key === DOC_FT_REPORT || doc.key === DOC_FT_EVIDENCE) deadline = reportDeadline(record, state.settings, holidays);
         out.push({ record, doc, deadline });
       }
     }
@@ -493,7 +516,7 @@ function PendingDocs() {
                 <span className="muted">
                   {' '}
                   · {formatKo(record.startDate)} {shortTitle(record)}
-                  {doc.key === DOC_FT_REPORT && now <= record.endDate && ' · 다녀온 후'}
+                  {(doc.key === DOC_FT_REPORT || doc.key === DOC_FT_EVIDENCE) && now <= record.endDate && ' · 다녀온 후'}
                   {deadline && ` · 기한 ${formatKo(deadline)}`}
                 </span>
               </span>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { addDays, schoolYearOf, schoolYearRange, today } from '../domain/calendar';
-import { summarize, type StudentSummary } from '../domain/stats';
+import { specialNotes, summarize, type StudentSummary } from '../domain/stats';
 import { KINDS, STATUSES } from '../domain/types';
 import { downloadBlob } from '../storage/db';
 import { useStore } from '../store';
@@ -127,8 +127,51 @@ export function Dashboard() {
         누적이고, "5+3"은 사용 5일·예정 3일입니다. 출결 통계는 오늘까지만 셉니다.
       </p>
 
+      <SpecialNotes year={year} />
+
       {detail && <StudentDetail studentId={detail} from={from} to={to} onClose={() => setDetail(null)} />}
     </div>
+  );
+}
+
+/** 나이스 출결 특기사항 입력 대상 (학년도 기준) */
+function SpecialNotes({ year }: { year: number }) {
+  const { state, holidays } = useStore();
+  const [from, to] = schoolYearRange(year);
+  const notes = useMemo(
+    () => specialNotes(sortStudents(state.students), state.records, holidays, from, to),
+    [state.students, state.records, holidays, from, to],
+  );
+  const groups = (['장기결석', '기타결석', '개근'] as const).map((k) => ({ k, items: notes.filter((n) => n.kind === k) }));
+  return (
+    <section className="card overview special-notes">
+      <h3>
+        나이스 출결 특기사항 <span className="muted">{year}학년도</span>
+      </h3>
+      {groups.map(({ k, items }) => (
+        <div key={k}>
+          <b className="field-label">
+            {k === '장기결석' ? '질병·미인정 연속 10일 이상' : k === '기타결석' ? '기타결석' : '개근 (현재까지)'} {items.length}명
+          </b>
+          {items.length > 0 && (
+            <ul className="overview-list">
+              {items.map((n) => (
+                <li key={n.student.id + n.text}>
+                  <span className="who">
+                    {n.student.number}. {n.student.name}
+                  </span>
+                  <span>{n.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+      <p className="hint">
+        개근은 질병·미인정·기타 결석·지각·조퇴·결과가 하나도 없는 학생이에요 (출석인정은 출석으로 봄). 학년말에 확정되니 그때 다시
+        확인하세요. 개인정보 보호가 필요한 질병은 학업성적관리위원회 심의를 거쳐 사유를 입력하지 않아요.
+      </p>
+    </section>
   );
 }
 

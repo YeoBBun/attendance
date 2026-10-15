@@ -3,19 +3,20 @@ import { formatKo, today } from '../domain/calendar';
 import {
   applicationDeadline,
   computeWarnings,
+  type DocContext,
   fieldTripCumulative,
   fieldTripDays,
   isCustomDoc,
   rebuildDocs,
   reportDeadline,
 } from '../domain/rules';
-import { APPROVED_REASONS, KINDS, STATUSES, type AttendanceRecord, type DocItem } from '../domain/types';
+import { APPROVED_REASONS, FAMILY_EVENTS, KINDS, STATUSES, type AttendanceRecord, type DocItem } from '../domain/types';
 import { newId, useStore } from '../store';
-import { Modal, PeriodPicker, sortStudents } from './common';
+import { KindGuide, Modal, PeriodPicker, recordDates, recordTitle, sortStudents } from './common';
 
 const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
-function blankRecord(studentId: string, date: string, prefill?: Partial<AttendanceRecord>): AttendanceRecord {
+function blankRecord(studentId: string, date: string, ctx: DocContext, prefill?: Partial<AttendanceRecord>): AttendanceRecord {
   const base: AttendanceRecord = {
     id: newId(),
     studentId,
@@ -27,7 +28,7 @@ function blankRecord(studentId: string, date: string, prefill?: Partial<Attendan
     memo: '',
     ...prefill,
   };
-  return { ...base, docs: rebuildDocs([], base.status, base.kind, base.kind === '출석인정' ? base.reason : undefined) };
+  return { ...base, docs: rebuildDocs([], { ...base, reason: base.kind === '출석인정' ? base.reason : undefined }, ctx) };
 }
 
 /** 저장 전에 상황·종류에 맞지 않는 필드를 정리한다. */
@@ -41,6 +42,7 @@ export function clean(r: AttendanceRecord): AttendanceRecord {
   if (!(out.status === '조퇴' || (multiTrip && out.fieldTrip?.startPM))) delete out.leaveFrom;
   if (out.kind !== '출석인정') delete out.reason;
   if (out.reason !== '법정감염병') delete out.illness;
+  if (out.reason !== '경조사') delete out.familyEvent;
   if (out.reason !== '체험학습') delete out.fieldTrip;
   else if (out.fieldTrip && (out.status !== '결석' || out.startDate === out.endDate)) {
     const { startPM: _s, endAM: _e, ...rest } = out.fieldTrip;
@@ -63,11 +65,11 @@ export function RecordForm({
   prefill?: Partial<AttendanceRecord>;
   onClose: () => void;
 }) {
-  const { state, update, holidays } = useStore();
+  const { state, update, holidays, docContext, removeRecord } = useStore();
   const students = sortStudents(state.students);
   const isNew = !initial;
   const [draft, setDraft] = useState<AttendanceRecord>(
-    () => initial ?? blankRecord(defaultStudentId ?? '', defaultDate ?? today(), prefill),
+    () => initial ?? blankRecord(defaultStudentId ?? '', defaultDate ?? today(), docContext, prefill),
   );
   // 새 기록은 여러 학생에게 한 번에 넣을 수 있다 (예: 공문 대회 참가).
   const [selected, setSelected] = useState<string[]>(defaultStudentId ? [defaultStudentId] : []);
@@ -77,11 +79,14 @@ export function RecordForm({
   const set = (patch: Partial<AttendanceRecord>) => {
     setDraft((d) => {
       const next = { ...d, ...patch };
-      if (patch.status || patch.kind || 'reason' in patch) {
-        next.docs = rebuildDocs(d.docs, next.status, next.kind, next.kind === '출석인정' ? next.reason : undefined);
-      }
       if (next.status !== '결석') next.endDate = next.startDate;
       if (next.endDate < next.startDate) next.endDate = next.startDate;
+      // 질병결석은 기간(3일 이상·시험 기간)에 따라 필요서류가 달라지므로 날짜가 바뀌어도 다시 만든다.
+      if (patch.status || patch.kind || 'reason' in patch || patch.startDate || patch.endDate) {
+        next.docs = rebuildDocs(d.docs, { ...next, reason: next.kind === '출석인정' ? next.reason : undefined }, docContext, {
+          resetRequired: next.kind === '질병' && (patch.startDate !== undefined || patch.endDate !== undefined || !!patch.kind || !!patch.status),
+        });
+      }
       return next;
     });
   };
@@ -107,6 +112,7 @@ export function RecordForm({
     const c = clean(draft);
     const needLate = c.status === '지각' || (c.status === '결석' && c.fieldTrip?.endAM && c.startDate !== c.endDate);
     const needLeave = c.status === '조퇴' || (c.status === '결석' && c.fieldTrip?.startPM && c.startDate !== c.endDate);
+    if (c.reason === '경조사' && !c.familyEvent) return setError('경조사 종류를 고르세요.');
     if (c.status === '결과' && !c.periods?.length) return setError('결과 교시(빠진 교시)를 고르세요.');
     if (needLate && c.lateUntil === undefined) return setError('지각 교시(몇 교시까지 빠졌는지)를 고르세요.');
     if (needLeave && c.leaveFrom === undefined) return setError('조퇴 교시(몇 교시부터 빠졌는지)를 고르세요.');
@@ -121,8 +127,9 @@ export function RecordForm({
   };
 
   const remove = () => {
-    if (!initial || !confirm('이 기록을 삭제할까요?')) return;
-    update((s) => ({ ...s, records: s.records.filter((r) => r.id !== initial.id) }));
+    if (!initial) return;
+    const name = state.students.find((st) => st.id === initial.studentId)?.name ?? '';
+    removeRecord(initial.id, `${name} ${recordDates(initial)} ${recordTitle(initial)}`);
     onClose();
   };
 
@@ -196,6 +203,25 @@ export function RecordForm({
             </div>
           </section>
         )}
+
+        {draft.kind === '출석인정' && draft.reason === '경조사' && (
+          <section>
+            <label className="field-label">경조사 종류 (인정 일수)</label>
+            <div className="seg">
+              {FAMILY_EVENTS.map((e) => (
+                <button
+                  key={e.key}
+                  type="button"
+                  className={draft.familyEvent === e.key ? 'on' : ''}
+                  onClick={() => set({ familyEvent: e.key })}
+                >
+                  {e.key} ({e.days}일)
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+        <KindGuide kind={draft.kind} status={draft.status} />
 
         <section className="row">
           <div>
@@ -419,7 +445,7 @@ export function RecordForm({
         <footer className="form-actions">
           {!isNew && (
             <button type="button" className="danger" onClick={remove}>
-              삭제
+              이 기록 삭제
             </button>
           )}
           <span className="spacer" />

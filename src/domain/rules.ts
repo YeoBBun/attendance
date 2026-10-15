@@ -9,46 +9,74 @@ import {
   schoolYearOf,
   type HolidayIndex,
 } from './calendar';
-import type { ApprovedReason, AttendanceRecord, DateStr, DocItem, Kind, Settings, Status } from './types';
+import { FAMILY_EVENTS, type ApprovedReason, type AttendanceRecord, type DateStr, type DocItem, type ExamPeriod, type Settings, type Status } from './types';
 
 // ─── 필요서류 ─────────────────────────────────────────────
+// 기준: 교내 출결 관리 기준표 (결석 유형별 확인 사항 및 증빙 서류)
 
 export const DOC_ABSENCE_NOTE = 'absence-note';
 export const DOC_FT_APPLICATION = 'fieldtrip:application';
 export const DOC_FT_REPORT = 'fieldtrip:report';
+export const DOC_FT_EVIDENCE = 'fieldtrip:evidence';
 export const DOC_MEDICAL = 'evidence:medical';
+export const DOC_GUARDIAN_CHECK = 'check:guardian';
 
-const REASON_EVIDENCE: Record<ApprovedReason, Omit<DocItem, 'received'>[]> = {
+type DocSpec = Omit<DocItem, 'received'>;
+
+const REASON_EVIDENCE: Record<ApprovedReason, DocSpec[]> = {
   법정감염병: [{ key: 'evidence:infection', label: '의사 소견서', required: true }],
   체험학습: [
     { key: DOC_FT_APPLICATION, label: '체험학습 신청서', required: true },
-    { key: DOC_FT_REPORT, label: '체험학습 보고서(사진 등 첨부)', required: true },
+    { key: DOC_FT_REPORT, label: '체험학습 보고서', required: true },
+    { key: DOC_FT_EVIDENCE, label: '근거자료(사진·항공권·입장권 등)', required: true },
   ],
-  경조사: [{ key: 'evidence:family-event', label: '증빙서류(청첩장·사망진단서 등)', required: true }],
+  경조사: [{ key: 'evidence:family-event', label: '근거 서류(청첩장·사망진단서 등)', required: true }],
   생리: [],
   공문: [{ key: 'evidence:official', label: '공문', required: true }],
 };
 
-/** 출결 상황·종류·사유에 따라 기본 필요서류 목록을 만든다. */
-export function docTemplate(status: Status, kind: Kind, reason?: ApprovedReason): Omit<DocItem, 'received'>[] {
-  switch (kind) {
+/** 서류 규칙에 필요한 기간 정보 (질병결석 일수, 시험 기간) */
+export interface DocContext {
+  holidays: HolidayIndex;
+  exams: ExamPeriod[];
+}
+
+const NO_CONTEXT: DocContext = { holidays: new Map(), exams: [] };
+
+export type DocInput = Pick<AttendanceRecord, 'status' | 'kind' | 'reason' | 'startDate' | 'endDate'>;
+
+/** 질병결석에 진료확인서·처방전 등 근거 서류가 필요한가: 3일 이상이거나 시험 기간에 걸치면 필요 */
+export function illnessNeedsEvidence(r: DocInput, ctx: DocContext = NO_CONTEXT): boolean {
+  if (r.kind !== '질병' || r.status !== '결석') return false;
+  if (countSchoolDays(r.startDate, r.endDate, ctx.holidays) >= 3) return true;
+  return ctx.exams.some((e) => rangesOverlap(r.startDate, r.endDate, e.start, e.end));
+}
+
+/** 출결 상황·종류·사유(와 질병결석 기간)에 따라 기본 필요서류 목록을 만든다. */
+export function docTemplate(r: DocInput, ctx: DocContext = NO_CONTEXT): DocSpec[] {
+  const note = { key: DOC_ABSENCE_NOTE, label: '결석계', required: true };
+  switch (r.kind) {
     case '출석인정':
       // 체험학습은 신청서·보고서로 대신하므로 결석계를 받지 않는다.
-      return [
-        ...(reason === '체험학습' ? [] : [{ key: DOC_ABSENCE_NOTE, label: '결석계', required: true }]),
-        ...(reason ? REASON_EVIDENCE[reason] : []),
-      ];
-    case '질병': {
-      // 질병 결석은 결석계와 증빙 모두 필수. 질병 지각·조퇴·결과는 담임 재량으로 증빙만 선택적으로 받는다.
-      return status === '결석'
-        ? [
-            { key: DOC_ABSENCE_NOTE, label: '결석계', required: true },
-            { key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: true },
-          ]
-        : [{ key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: false }];
-    }
-    default:
-      return [];
+      return [...(r.reason === '체험학습' ? [] : [note]), ...(r.reason ? REASON_EVIDENCE[r.reason] : [])];
+    case '질병':
+      if (r.status !== '결석') {
+        // 질병 지각·조퇴·결과는 담임 재량으로 증빙만 선택적으로 받는다.
+        return [{ key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: false }];
+      }
+      // 2일 이하: 결석계 + 보호자 전화·문자 확인으로 가능. 3일 이상·시험 기간: 진료확인서·처방전 등 필수.
+      return illnessNeedsEvidence(r, ctx)
+        ? [note, { key: DOC_MEDICAL, label: '진료확인서·처방전 등', required: true }]
+        : [
+            note,
+            { key: DOC_GUARDIAN_CHECK, label: '보호자 확인(전화·문자)', required: true },
+            { key: DOC_MEDICAL, label: '진료확인서·처방전 등', required: false },
+          ];
+    case '기타':
+      // 학교장이 인정한 부득이한 사유만 — 근거 서류 필수 (예: 부 병원 간병 → 입원 증빙)
+      return [{ key: 'evidence:etc', label: '근거 서류', required: true }];
+    case '미인정':
+      return [{ key: 'check:student-sign', label: '출력물 학생 서명', required: true }];
   }
 }
 
@@ -58,13 +86,20 @@ export function isCustomDoc(doc: DocItem): boolean {
 
 /**
  * 출결 정보가 바뀌었을 때 서류 목록을 다시 만든다.
- * 이미 있던 서류는 받은 상태와 필수 여부를 유지하고, 직접 추가한 서류는 그대로 둔다.
+ * 이미 있던 서류는 받은 상태를 유지하고, 직접 추가한 서류는 그대로 둔다.
+ * 필수 여부는 선생님이 바꾼 값을 유지하되, resetRequired 면 기준표 값으로 되돌린다.
  */
-export function rebuildDocs(prev: DocItem[], status: Status, kind: Kind, reason?: ApprovedReason): DocItem[] {
+export function rebuildDocs(
+  prev: DocItem[],
+  r: DocInput,
+  ctx: DocContext = NO_CONTEXT,
+  opts: { resetRequired?: boolean } = {},
+): DocItem[] {
   const byKey = new Map(prev.map((d) => [d.key, d]));
-  const fromTemplate = docTemplate(status, kind, reason).map((t) => {
+  const fromTemplate = docTemplate(r, ctx).map((t) => {
     const old = byKey.get(t.key);
-    return old ? { ...t, required: old.required, received: old.received, receivedDate: old.receivedDate } : { ...t, received: false };
+    if (!old) return { ...t, received: false };
+    return { ...t, required: opts.resetRequired ? t.required : old.required, received: old.received, receivedDate: old.receivedDate };
   });
   return [...fromTemplate, ...prev.filter(isCustomDoc)];
 }
@@ -217,6 +252,18 @@ export function computeWarnings(ctx: RuleContext): Map<string, string[]> {
         }
         break;
       }
+      case '경조사': {
+        const ev = FAMILY_EVENTS.find((e) => e.key === r.familyEvent);
+        if (!ev) {
+          add(r.id, '경조사 종류를 고르세요 (종류마다 인정 일수가 다릅니다).');
+        } else if (r.status === '결석') {
+          const used = countSchoolDays(r.startDate, r.endDate, holidays);
+          if (used > ev.days) {
+            add(r.id, `경조사(${ev.key})는 ${ev.days}일까지 인정됩니다 (현재 ${used}일). 초과분은 미인정결석 처리 대상입니다.`);
+          }
+        }
+        break;
+      }
       case '법정감염병': {
         const ill = r.illness;
         if (!ill?.certStart || !ill?.certEnd) {
@@ -235,12 +282,18 @@ export function computeWarnings(ctx: RuleContext): Map<string, string[]> {
           add(r.id, '체험학습은 결석(종일) 또는 지각(오전)·조퇴(오후)의 반일 단위로 기록합니다.');
         }
         const days = fieldTripDays(r, holidays);
-        if (ft?.abroad && days > settings.abroadMaxDays) {
-          add(r.id, `국외 체험학습은 1회 연속 ${settings.abroadMaxDays}일 이내입니다 (현재 ${days}일).`);
+        if (days > settings.tripMaxConsecutiveDays) {
+          add(
+            r.id,
+            `체험학습은 국내·국외 모두 1회 연속 ${settings.tripMaxConsecutiveDays}일 이내입니다 (현재 ${days}일). 초과분은 미인정결석 처리 대상입니다.`,
+          );
         }
         const total = cumulative.get(r.id) ?? 0;
         if (total > settings.fieldTripYearlyMax) {
-          add(r.id, `연간 체험학습 ${settings.fieldTripYearlyMax}일을 초과합니다 (누적 ${total}일).`);
+          add(
+            r.id,
+            `연간 체험학습 ${settings.fieldTripYearlyMax}일을 초과합니다 (누적 ${total}일). 초과분은 미인정결석 처리 대상입니다.`,
+          );
         }
         checkApplication(r, applicationDeadline(r, settings, holidays), today, add);
         checkDeadline(r, DOC_FT_REPORT, reportDeadline(r, settings, holidays), '보고서', today, add);

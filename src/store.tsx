@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { indexHolidays, today, type HolidayIndex } from './domain/calendar';
-import { computeWarnings } from './domain/rules';
-import type { AppState } from './domain/types';
+import { computeWarnings, type DocContext } from './domain/rules';
+import type { AppState, AttendanceRecord } from './domain/types';
 import { loadState, requestPersistence, saveState } from './storage/db';
 
 interface Store {
@@ -9,9 +9,21 @@ interface Store {
   update: (fn: (s: AppState) => AppState) => void;
   replace: (s: AppState) => void;
   holidays: HolidayIndex;
+  /** 서류 규칙(질병결석 일수·시험 기간)에 쓰는 정보 */
+  docContext: DocContext;
   warnings: Map<string, string[]>;
   saveError: string | null;
+  /** 기록을 바로 지우고, 잠깐 동안 '되돌리기'를 보여준다. label 은 안내에 쓰는 설명 */
+  removeRecord: (id: string, label: string) => void;
 }
+
+interface Undo {
+  record: AttendanceRecord;
+  index: number;
+  label: string;
+}
+
+const UNDO_MS = 8000;
 
 const StoreContext = createContext<Store | null>(null);
 
@@ -20,6 +32,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const loaded = useRef(false);
+  const stateRef = useRef<AppState | null>(null);
+  stateRef.current = state;
+  const [undo, setUndo] = useState<Undo | null>(null);
+
+  const removeRecord = useCallback((id: string, label: string) => {
+    const s = stateRef.current;
+    const index = s?.records.findIndex((r) => r.id === id) ?? -1;
+    if (!s || index < 0) return;
+    setState({ ...s, records: s.records.filter((r) => r.id !== id) });
+    setUndo({ record: s.records[index], index, label });
+  }, []);
+
+  const restore = () => {
+    if (!undo) return;
+    setState((s) =>
+      s && !s.records.some((r) => r.id === undo.record.id)
+        ? { ...s, records: [...s.records.slice(0, undo.index), undo.record, ...s.records.slice(undo.index)] }
+        : s,
+    );
+    setUndo(null);
+  };
+
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), UNDO_MS);
+    return () => clearTimeout(t);
+  }, [undo]);
 
   useEffect(() => {
     loadState()
@@ -42,6 +81,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replace = useCallback((s: AppState) => setState(s), []);
 
   const holidays = useMemo(() => indexHolidays(state?.holidays ?? []), [state?.holidays]);
+  const docContext = useMemo(
+    () => ({ holidays, exams: state?.settings.examPeriods ?? [] }),
+    [holidays, state?.settings.examPeriods],
+  );
   const warnings = useMemo(
     () =>
       state
@@ -54,8 +97,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   if (!state) return <div className="fatal">불러오는 중…</div>;
 
   return (
-    <StoreContext.Provider value={{ state, update, replace, holidays, warnings, saveError }}>
+    <StoreContext.Provider value={{ state, update, replace, holidays, docContext, warnings, saveError, removeRecord }}>
       {children}
+      {undo && (
+        <div className="toast" role="status">
+          <span>{undo.label} 삭제했어요</span>
+          <button onClick={restore}>되돌리기</button>
+        </div>
+      )}
     </StoreContext.Provider>
   );
 }

@@ -1,5 +1,5 @@
-import { addDays, schoolYearOf, schoolYearRange, type HolidayIndex } from './calendar';
-import { absenceDays, fieldTripDays, halfDaysIn, missingDocs, statusOn } from './rules';
+import { addDays, addSchoolDays, formatKo, isSchoolDay, schoolYearOf, schoolYearRange, type HolidayIndex } from './calendar';
+import { absenceDays, fieldTripDays, halfDays, halfDaysIn, missingDocs, statusOn } from './rules';
 import { KINDS, STATUSES, type AttendanceRecord, type DateStr, type Kind, type Status, type Student } from './types';
 
 export interface StudentSummary {
@@ -90,4 +90,71 @@ export function summarize(
       warningCount: warn,
     };
   });
+}
+
+// ─── 나이스 출결 특기사항 ──────────────────────────────────
+
+export interface SpecialNote {
+  student: Student;
+  kind: '장기결석' | '기타결석' | '개근';
+  text: string;
+}
+
+const LONG_ABSENCE_DAYS = 10;
+
+/** 결석 기록에서 그 종류의 결석일(반일 제외 수업일)을 모은다. */
+function absenceDates(records: AttendanceRecord[], kind: Kind, holidays: HolidayIndex, from: DateStr, to: DateStr): DateStr[] {
+  const days = new Set<DateStr>();
+  for (const r of records) {
+    if (r.kind !== kind || r.status !== '결석' || r.endDate < from || r.startDate > to) continue;
+    const half = halfDays(r);
+    for (let d = r.startDate > from ? r.startDate : from; d <= r.endDate && d <= to; d = addDays(d, 1)) {
+      if (isSchoolDay(d, holidays) && !half.includes(d)) days.add(d);
+    }
+  }
+  return [...days].sort();
+}
+
+/** 수업일 기준으로 이어지는 결석 구간 (기록이 여러 건으로 나뉘어 있어도 이어서 센다) */
+function consecutiveRuns(dates: DateStr[], holidays: HolidayIndex): DateStr[][] {
+  const runs: DateStr[][] = [];
+  for (const d of dates) {
+    const last = runs.at(-1);
+    if (last && addSchoolDays(last.at(-1)!, 1, holidays) === d) last.push(d);
+    else runs.push([d]);
+  }
+  return runs;
+}
+
+/**
+ * 나이스 출결 특기사항 입력 대상 (2025학년도~ 기준).
+ * - 질병·미인정 연속 10일 이상 장기결석, 기타결석: 사유 입력
+ * - 개근: '개근' 입력 (질병·미인정·기타 결석·지각·조퇴·결과가 하나도 없는 학생)
+ */
+export function specialNotes(
+  students: Student[],
+  records: AttendanceRecord[],
+  holidays: HolidayIndex,
+  from: DateStr,
+  to: DateStr,
+): SpecialNote[] {
+  const notes: SpecialNote[] = [];
+  for (const student of students) {
+    const mine = records.filter((r) => r.studentId === student.id && r.endDate >= from && r.startDate <= to);
+    for (const kind of ['질병', '미인정'] as const) {
+      for (const run of consecutiveRuns(absenceDates(mine, kind, holidays, from, to), holidays)) {
+        if (run.length >= LONG_ABSENCE_DAYS) {
+          notes.push({
+            student,
+            kind: '장기결석',
+            text: `${kind}결석 연속 ${run.length}일 (${formatKo(run[0])}~${formatKo(run.at(-1)!)}) — 사유 입력`,
+          });
+        }
+      }
+    }
+    const etc = absenceDates(mine, '기타', holidays, from, to);
+    if (etc.length) notes.push({ student, kind: '기타결석', text: `기타결석 ${etc.length}일 — 사유 입력` });
+    if (!mine.some((r) => r.kind !== '출석인정')) notes.push({ student, kind: '개근', text: "'개근' 입력" });
+  }
+  return notes;
 }

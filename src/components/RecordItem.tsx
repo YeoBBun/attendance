@@ -5,7 +5,7 @@ import { kindClass, recordDates, recordTitle, studentLabel } from './common';
 
 /** 기록 한 줄: 날짜·학생·상황, 서류 체크 칩, 경고 */
 export function RecordItem({ record, showStudent, onEdit }: { record: AttendanceRecord; showStudent?: boolean; onEdit: () => void }) {
-  const { state, update, warnings } = useStore();
+  const { state, update, warnings, removeRecord } = useStore();
   const student = state.students.find((s) => s.id === record.studentId);
   const warns = warnings.get(record.id) ?? [];
 
@@ -26,12 +26,21 @@ export function RecordItem({ record, showStudent, onEdit }: { record: Attendance
 
   return (
     <li className="record">
-      <button className="record-main" onClick={onEdit}>
-        <span className="date">{recordDates(record)}</span>
-        {showStudent && <span className="who">{studentLabel(student)}</span>}
-        <span className={`tag ${kindClass(record.kind)}`}>{recordTitle(record)}</span>
-        {record.memo && <span className="memo">{record.memo}</span>}
-      </button>
+      <div className="record-head">
+        <button className="record-main" onClick={onEdit} title="눌러서 고치기">
+          <span className="date">{recordDates(record)}</span>
+          {showStudent && <span className="who">{studentLabel(student)}</span>}
+          <span className={`tag ${kindClass(record.kind)}`}>{recordTitle(record)}</span>
+          {record.memo && <span className="memo">{record.memo}</span>}
+        </button>
+        <button
+          className="del-btn"
+          onClick={() => removeRecord(record.id, `${student?.name ?? ''} ${recordDates(record)} ${recordTitle(record)}`)}
+          aria-label="삭제"
+        >
+          삭제
+        </button>
+      </div>
       {record.docs.length > 0 && (
         <div className="doc-chips">
           {record.docs.map((d) => (

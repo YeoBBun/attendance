@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import type { AttendanceRecord, Kind, Student } from '../domain/types';
+import type { AttendanceRecord, Kind, Status, Student } from '../domain/types';
 import { countSchoolDays, formatKo, type HolidayIndex } from '../domain/calendar';
 import { periodNote } from '../domain/neis';
 import { statusOn } from '../domain/rules';
@@ -116,3 +116,17 @@ export function PeriodPicker({
     </div>
   );
 }
+
+/** 종류를 고르면 기준표의 확인 사항을 짧게 보여준다. */
+export function KindGuide({ kind, status }: { kind: Kind; status: Status | null }) {
+  const text =
+    kind === '기타'
+      ? '기타는 학교장이 인정한 부득이한 사유(부모·가족 봉양, 가사 조력, 간병 등)만 해당해요. 신청 없이 가족여행·집안행사로 빠졌거나 사유가 분명하지 않으면 미인정이에요. 근거 서류 필수, 나이스 특기사항에 사유를 입력해요.'
+      : kind === '질병' && status === '결석'
+        ? '2일 이하는 결석계 + 보호자 전화·문자 확인(결석계 담임확인란에 기록), 3일 이상이거나 시험 기간이면 진료확인서·처방전 등이 필요해요.'
+        : kind === '미인정'
+          ? '출력물에 학생 서명을 받아 두세요. 연속 10일 이상이면 나이스 특기사항에 사유를 입력해요.'
+          : null;
+  return text ? <p className="hint">{text}</p> : null;
+}
+

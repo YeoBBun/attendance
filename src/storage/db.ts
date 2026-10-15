@@ -1,5 +1,6 @@
-import { DOC_MEDICAL } from '../domain/rules';
-import { DEFAULT_SETTINGS, emptyState, type AppState } from '../domain/types';
+import { indexHolidays } from '../domain/calendar';
+import { rebuildDocs } from '../domain/rules';
+import { DEFAULT_SETTINGS, emptyState, type AppState, type Settings } from '../domain/types';
 
 // 모든 데이터는 이 브라우저의 IndexedDB 에만 저장한다. 외부 서버로 보내지 않는다.
 const DB_NAME = 'attendance-app';
@@ -49,25 +50,26 @@ export function normalize(raw: unknown): AppState {
   if (!raw || typeof raw !== 'object') throw new Error('올바른 백업 파일이 아닙니다.');
   // 이전 버전 파일도 받으므로 version 은 숫자로 넓혀 읽는다.
   const s = raw as Partial<Omit<AppState, 'version'>> & { version?: number };
-  if ((s.version !== 1 && s.version !== 2) || !Array.isArray(s.students) || !Array.isArray(s.records) || !Array.isArray(s.holidays)) {
+  if (![1, 2, 3].includes(s.version ?? 0) || !Array.isArray(s.students) || !Array.isArray(s.records) || !Array.isArray(s.holidays)) {
     throw new Error('올바른 백업 파일이 아닙니다.');
   }
-  let records = s.records;
-  if (s.version === 1) {
-    // v1 에서는 질병 결석의 증빙이 '선택'이었다. 지금 규정(필수)에 맞춘다.
-    records = records.map((r) =>
-      r.kind === '질병' && r.status === '결석'
-        ? { ...r, docs: r.docs.map((d) => (d.key === DOC_MEDICAL ? { ...d, required: true } : d)) }
-        : r,
-    );
-  }
-  return {
-    version: 2,
-    students: s.students,
-    records,
-    holidays: s.holidays,
-    settings: { ...DEFAULT_SETTINGS, ...s.settings },
+  const oldSettings = (s.settings ?? {}) as Partial<Settings> & { abroadMaxDays?: number };
+  const { abroadMaxDays, ...restSettings } = oldSettings;
+  const settings: Settings = {
+    ...DEFAULT_SETTINGS,
+    ...restSettings,
+    // v2 까지는 «국외만 1회 연속 N일» 이었다. 지금은 국내·국외 모두에 적용한다.
+    tripMaxConsecutiveDays: oldSettings.tripMaxConsecutiveDays ?? abroadMaxDays ?? DEFAULT_SETTINGS.tripMaxConsecutiveDays,
+    examPeriods: oldSettings.examPeriods ?? [],
   };
+  let records = s.records;
+  if ((s.version ?? 0) < 3) {
+    // v3 에서 서류 기준을 교내 출결 기준표에 맞췄다 (질병결석 2일 이하/3일 이상, 기타·미인정 서류 등).
+    // 받은 상태는 그대로 두고 필수 여부만 기준표 값으로 맞춘다.
+    const ctx = { holidays: indexHolidays(s.holidays), exams: settings.examPeriods };
+    records = records.map((r) => ({ ...r, docs: rebuildDocs(r.docs, r, ctx, { resetRequired: true }) }));
+  }
+  return { version: 3, students: s.students, records, holidays: s.holidays, settings };
 }
 
 export function exportBackup(state: AppState): void {

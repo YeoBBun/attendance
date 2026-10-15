@@ -10,7 +10,7 @@ const PART_STATUS: Record<Part, Status> = { 종일: '결석', 오전: '지각', 
 
 /** 학생이 신청서를 낸 날 체험학습을 접수한다. 신청서는 접수일로 받음 처리된다. */
 export function FieldTripIntake({ onClose }: { onClose: () => void }) {
-  const { state, update, holidays } = useStore();
+  const { state, update, holidays, docContext } = useStore();
   const now = today();
   const [studentId, setStudentId] = useState('');
   const [start, setStart] = useState('');
@@ -35,7 +35,11 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
     const useLate = singleDay ? status === '지각' : endAM;
     const useLeave = singleDay ? status === '조퇴' : startPM;
     if ((useLate && lateUntil === undefined) || (useLeave && leaveFrom === undefined)) return null;
-    const docs = rebuildDocs([], status, '출석인정', '체험학습').map((d) =>
+    const docs = rebuildDocs(
+      [],
+      { status, kind: '출석인정', reason: '체험학습', startDate: start, endDate: status === '결석' ? endDate : start },
+      docContext,
+    ).map((d) =>
       d.key === DOC_FT_APPLICATION ? { ...d, received: true, receivedDate } : d,
     );
     return {
@@ -54,7 +58,7 @@ export function FieldTripIntake({ onClose }: { onClose: () => void }) {
       docs,
       memo: '',
     };
-  }, [studentId, start, endDate, singleDay, effectivePart, abroad, guardian, receivedDate, startPM, endAM, lateUntil, leaveFrom]);
+  }, [studentId, start, endDate, singleDay, effectivePart, abroad, guardian, receivedDate, startPM, endAM, lateUntil, leaveFrom, docContext]);
 
   const preview = useMemo(() => {
     if (!draft) return null;

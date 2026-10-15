@@ -13,6 +13,22 @@ export type Kind = (typeof KINDS)[number];
 export const APPROVED_REASONS = ['법정감염병', '체험학습', '경조사', '생리', '공문'] as const;
 export type ApprovedReason = (typeof APPROVED_REASONS)[number];
 
+/** 경조사 종류와 인정 일수 (교내 출결 기준표, 2025학년도~) */
+export const FAMILY_EVENTS = [
+  { key: '형제자매·부모 결혼', days: 1 },
+  { key: '학생 본인 입양', days: 20 },
+  { key: '부모·(외)조부모 사망', days: 5 },
+  { key: '(외)증조부모 사망', days: 3 },
+  { key: '부모의 형제자매(배우자 포함) 사망', days: 3 },
+] as const;
+export type FamilyEvent = (typeof FAMILY_EVENTS)[number]['key'];
+
+export interface ExamPeriod {
+  start: DateStr;
+  end: DateStr;
+  name: string;
+}
+
 export interface Student {
   id: string;
   number: number;
@@ -71,6 +87,8 @@ export interface AttendanceRecord {
   leaveFrom?: number;
   illness?: IllnessInfo;
   fieldTrip?: FieldTripInfo;
+  /** 출석인정 경조사 종류 */
+  familyEvent?: FamilyEvent;
   docs: DocItem[];
   memo: string;
 }
@@ -85,17 +103,19 @@ export interface Settings {
   /** 체험학습 보고서: 종료 후 N일 이내 */
   reportDaysAfter: number;
   reportBasis: DeadlineBasis;
-  /** 국외 체험학습 1회 최대 일수 */
-  abroadMaxDays: number;
+  /** 체험학습 1회 연속 최대 일수 (국내·국외 모두) */
+  tripMaxConsecutiveDays: number;
   /** 체험학습 연간 최대 일수 */
   fieldTripYearlyMax: number;
+  /** 시험 기간: 이 기간의 질병결석은 일수와 관계없이 진료확인서 등 근거 서류가 필요하다 */
+  examPeriods: ExamPeriod[];
   lastBackupAt?: string;
   /** 마지막으로 나이스 파일을 내보낸 기간의 끝 날짜 */
   lastNeisExportTo?: DateStr;
 }
 
 export interface AppState {
-  version: 2;
+  version: 3;
   students: Student[];
   records: AttendanceRecord[];
   holidays: Holiday[];
@@ -108,10 +128,11 @@ export const DEFAULT_SETTINGS: Settings = {
   applicationBasis: 'school',
   reportDaysAfter: 7,
   reportBasis: 'calendar',
-  abroadMaxDays: 10,
+  tripMaxConsecutiveDays: 10,
   fieldTripYearlyMax: 20,
+  examPeriods: [],
 };
 
 export function emptyState(): AppState {
-  return { version: 2, students: [], records: [], holidays: [...PUBLIC_HOLIDAYS], settings: { ...DEFAULT_SETTINGS } };
+  return { version: 3, students: [], records: [], holidays: [...PUBLIC_HOLIDAYS], settings: { ...DEFAULT_SETTINGS } };
 }

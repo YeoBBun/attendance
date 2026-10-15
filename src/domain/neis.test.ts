@@ -14,7 +14,7 @@ function rec(p: Partial<AttendanceRecord>): AttendanceRecord {
   const status = p.status ?? '결석';
   const kind = p.kind ?? '질병';
   const startDate = p.startDate ?? '2026-10-13';
-  return { id: Math.random().toString(), studentId: 'a', status, kind, startDate, endDate: p.endDate ?? startDate, memo: '', docs: rebuildDocs([], status, kind), ...p };
+  return { id: Math.random().toString(), studentId: 'a', status, kind, startDate, endDate: p.endDate ?? startDate, memo: '', docs: rebuildDocs([], { status, kind, startDate, endDate: p.endDate ?? startDate }), ...p };
 }
 
 describe('나이스 내보내기', () => {

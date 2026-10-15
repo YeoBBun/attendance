@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { formatKo } from '../domain/calendar';
+import { formatKo, indexHolidays } from '../domain/calendar';
+import { rebuildDocs } from '../domain/rules';
 import { mergePublicHolidays } from '../domain/publicHolidays';
 import type { DeadlineBasis, HolidayType, Settings, Student } from '../domain/types';
 import { emptyState } from '../domain/types';
@@ -30,6 +31,7 @@ export function SettingsView() {
       <ClassSettings />
       <RosterSettings />
       <HolidaySettings />
+      <ExamSettings />
       <RuleSettings />
       <BackupSettings />
     </div>
@@ -212,6 +214,67 @@ function HolidaySettings() {
   );
 }
 
+/** 시험 기간: 이 기간의 질병결석은 하루여도 진료확인서·처방전 등이 필요하다. */
+function ExamSettings() {
+  const { state, update } = useStore();
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [name, setName] = useState('');
+  const exams = state.settings.examPeriods;
+
+  // 시험 기간이 바뀌면 이미 입력한 질병결석의 필요서류도 다시 계산한다.
+  const setExams = (list: typeof exams) =>
+    update((s) => {
+      const examPeriods = [...list].sort((a, b) => a.start.localeCompare(b.start));
+      const ctx = { holidays: indexHolidays(s.holidays), exams: examPeriods };
+      return {
+        ...s,
+        settings: { ...s.settings, examPeriods },
+        records: s.records.map((r) =>
+          r.kind === '질병' && r.status === '결석' ? { ...r, docs: rebuildDocs(r.docs, r, ctx, { resetRequired: true }) } : r,
+        ),
+      };
+    });
+
+  return (
+    <section className="card">
+      <h3>시험 기간</h3>
+      <p className="hint">시험 기간에 걸친 질병결석은 2일 이하여도 진료확인서·처방전 등 근거 서류가 필요해요.</p>
+      <div className="inline">
+        <input value={name} placeholder="이름 (예: 2학기 기말고사)" onChange={(e) => setName(e.target.value)} />
+        <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />~
+        <input type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
+        <button
+          disabled={!start}
+          onClick={() => {
+            setExams([...exams, { start, end: end && end >= start ? end : start, name: name.trim() || '시험' }]);
+            setStart('');
+            setEnd('');
+            setName('');
+          }}
+        >
+          추가
+        </button>
+      </div>
+      {exams.length > 0 && (
+        <ul className="holiday-list">
+          {exams.map((e, i) => (
+            <li key={`${e.start}-${i}`}>
+              <span>
+                {formatKo(e.start)}~{formatKo(e.end)}
+              </span>
+              <span>{e.name}</span>
+              <button className="ghost small" onClick={() => setExams(exams.filter((_, j) => j !== i))}>
+                삭제
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function RuleSettings() {
   const { state, update } = useStore();
   const s = state.settings;
@@ -240,8 +303,10 @@ function RuleSettings() {
           종료 후 {num(s.reportDaysAfter, (n) => set({ reportDaysAfter: n }))}일 이내{' '}
           {basis(s.reportBasis, (b) => set({ reportBasis: b }))}
         </span>
-        <span>국외 1회</span>
-        <span className="inline">연속 {num(s.abroadMaxDays, (n) => set({ abroadMaxDays: n }))}일 이내 (수업일 기준)</span>
+        <span>1회 신청</span>
+        <span className="inline">
+          국내·국외 연속 {num(s.tripMaxConsecutiveDays, (n) => set({ tripMaxConsecutiveDays: n }))}일 이내 (수업일 기준)
+        </span>
         <span>연간 합계</span>
         <span className="inline">{num(s.fieldTripYearlyMax, (n) => set({ fieldTripYearlyMax: n }))}일 (국내+국외)</span>
       </div>
