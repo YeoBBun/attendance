@@ -70,26 +70,26 @@ describe('calendar', () => {
 });
 
 describe('필요서류', () => {
-  it('출석인정 체험학습: 결석계 없이 신청서 + 보고서 + 근거자료', () => {
+  it('출석인정 체험학습: 결석계 없이 신청서 + 보고서(근거자료 첨부)', () => {
     const docs = docsFor('결석', '출석인정', '체험학습');
-    expect(docs.map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT, 'fieldtrip:evidence']);
+    expect(docs.map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT]);
     expect(docs.every((d) => d.required)).toBe(true);
   });
 
-  it('질병결석 2일 이하: 결석계 + 보호자 확인, 진료확인서는 선택', () => {
+  it('질병결석 2일 이하: 결석계만 필수, 진료확인서는 선택', () => {
     const docs = rebuildDocs([], { status: '결석', kind: '질병', startDate: '2026-10-12', endDate: '2026-10-13' }, ctx);
     expect(docs.map((d) => [d.label, d.required])).toEqual([
       ['결석계', true],
-      ['보호자 확인(전화·문자)', true],
       ['진료확인서·처방전 등', false],
     ]);
   });
 
   it('질병결석 3일 이상: 결석계 + 진료확인서 필수 (주말·공휴일 빼고 셈)', () => {
-    // 10/8(목)~10/12(월): 10/9 한글날·주말 빼면 2일 → 보호자 확인
-    expect(rebuildDocs([], { status: '결석', kind: '질병', startDate: '2026-10-08', endDate: '2026-10-12' }, ctx).map((d) => d.key)).toContain(
-      'check:guardian',
-    );
+    // 10/8(목)~10/12(월): 10/9 한글날·주말 빼면 2일 → 진료확인서 선택
+    expect(
+      rebuildDocs([], { status: '결석', kind: '질병', startDate: '2026-10-08', endDate: '2026-10-12' }, ctx).find((d) => d.key === 'evidence:medical')
+        ?.required,
+    ).toBe(false);
     const docs = rebuildDocs([], { status: '결석', kind: '질병', startDate: '2026-10-12', endDate: '2026-10-14' }, ctx);
     expect(docs.map((d) => [d.label, d.required])).toEqual([
       ['결석계', true],
@@ -214,7 +214,7 @@ describe('요약', () => {
     expect(s.absenceDays).toBe(3);
     expect(s.approvedAbsenceDays).toBe(2);
     expect(s.counts['지각']['질병']).toBe(1);
-    expect(s.missingDocCount).toBe(5); // 질병결석 결석계·보호자확인 + 미인정 학생서명 + 출석인정 결석계·공문 (질병지각 증빙은 선택)
+    expect(s.missingDocCount).toBe(4); // 질병결석 결석계 + 미인정 학생서명 + 출석인정 결석계·공문 (질병지각 증빙은 선택)
   });
 });
 
@@ -248,10 +248,9 @@ describe('저장 데이터 변환', () => {
       ],
     };
     const s = normalize(v2);
-    expect(s.version).toBe(3);
+    expect(s.version).toBe(4);
     expect(s.settings.tripMaxConsecutiveDays).toBe(7);
     expect(s.records[0].docs.find((d) => d.key === 'evidence:medical')?.required).toBe(false);
-    expect(s.records[0].docs.map((d) => d.key)).toContain('check:guardian');
     expect(s.records[1].docs.find((d) => d.key === 'evidence:medical')).toMatchObject({ required: true, received: true });
   });
 });
@@ -272,7 +271,7 @@ describe('체험학습 사전 입력', () => {
 
   it('보고서는 접수 때부터 받을 서류로 잡힌다', () => {
     const r = trip({ startDate: '2026-10-19', endDate: '2026-10-20' });
-    expect(missingDocs(r).map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT, 'fieldtrip:evidence']);
+    expect(missingDocs(r).map((d) => d.key)).toEqual([DOC_FT_APPLICATION, DOC_FT_REPORT]);
   });
 
   it('신청서 없이 실시되었거나 기한 후 접수면 미인정 대상 경고', () => {
@@ -352,5 +351,28 @@ describe('나이스 특기사항 대상', () => {
       [1, '개근'],
       [2, '기타결석'],
     ]);
+  });
+});
+
+describe('v3 → v4', () => {
+  it('체험학습 근거자료와 보호자 확인 항목을 지우고 받은 상태는 유지', async () => {
+    const { normalize } = await import('../storage/db');
+    const trip = rec({ id: 't', kind: '출석인정', reason: '체험학습', fieldTrip: { abroad: false, guardianAccompanied: true } });
+    trip.docs = [
+      { key: DOC_FT_APPLICATION, label: '신청서', required: true, received: true, receivedDate: '2026-10-01' },
+      { key: DOC_FT_REPORT, label: '보고서', required: true, received: false },
+      { key: 'fieldtrip:evidence', label: '근거자료', required: true, received: false },
+    ];
+    const ill = rec({ id: 'i', kind: '질병' });
+    ill.docs = [
+      { key: 'absence-note', label: '결석계', required: true, received: false },
+      { key: 'check:guardian', label: '보호자 확인', required: true, received: false },
+    ];
+    const s = normalize({ version: 3, students: [], holidays: HOLIDAYS, settings: {}, records: [trip, ill] });
+    expect(s.records[0].docs.map((d) => [d.key, d.received])).toEqual([
+      [DOC_FT_APPLICATION, true],
+      [DOC_FT_REPORT, false],
+    ]);
+    expect(s.records[1].docs.map((d) => d.key)).toEqual(['absence-note', 'evidence:medical']);
   });
 });

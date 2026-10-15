@@ -17,9 +17,7 @@ import { FAMILY_EVENTS, type ApprovedReason, type AttendanceRecord, type DateStr
 export const DOC_ABSENCE_NOTE = 'absence-note';
 export const DOC_FT_APPLICATION = 'fieldtrip:application';
 export const DOC_FT_REPORT = 'fieldtrip:report';
-export const DOC_FT_EVIDENCE = 'fieldtrip:evidence';
 export const DOC_MEDICAL = 'evidence:medical';
-export const DOC_GUARDIAN_CHECK = 'check:guardian';
 
 type DocSpec = Omit<DocItem, 'received'>;
 
@@ -27,8 +25,8 @@ const REASON_EVIDENCE: Record<ApprovedReason, DocSpec[]> = {
   법정감염병: [{ key: 'evidence:infection', label: '의사 소견서', required: true }],
   체험학습: [
     { key: DOC_FT_APPLICATION, label: '체험학습 신청서', required: true },
-    { key: DOC_FT_REPORT, label: '체험학습 보고서', required: true },
-    { key: DOC_FT_EVIDENCE, label: '근거자료(사진·항공권·입장권 등)', required: true },
+    // 근거자료(사진·항공권·입장권 등)는 보고서에 붙여서 낸다.
+    { key: DOC_FT_REPORT, label: '체험학습 보고서(근거자료 첨부)', required: true },
   ],
   경조사: [{ key: 'evidence:family-event', label: '근거 서류(청첩장·사망진단서 등)', required: true }],
   생리: [],
@@ -64,14 +62,8 @@ export function docTemplate(r: DocInput, ctx: DocContext = NO_CONTEXT): DocSpec[
         // 질병 지각·조퇴·결과는 담임 재량으로 증빙만 선택적으로 받는다.
         return [{ key: DOC_MEDICAL, label: '진료확인서 등 증빙', required: false }];
       }
-      // 2일 이하: 결석계 + 보호자 전화·문자 확인으로 가능. 3일 이상·시험 기간: 진료확인서·처방전 등 필수.
-      return illnessNeedsEvidence(r, ctx)
-        ? [note, { key: DOC_MEDICAL, label: '진료확인서·처방전 등', required: true }]
-        : [
-            note,
-            { key: DOC_GUARDIAN_CHECK, label: '보호자 확인(전화·문자)', required: true },
-            { key: DOC_MEDICAL, label: '진료확인서·처방전 등', required: false },
-          ];
+      // 2일 이하: 결석계만으로 가능 (보호자 전화·문자 확인은 결석계 담임확인란에). 3일 이상·시험 기간: 진료확인서·처방전 등 필수.
+      return [note, { key: DOC_MEDICAL, label: '진료확인서·처방전 등', required: illnessNeedsEvidence(r, ctx) }];
     case '기타':
       // 학교장이 인정한 부득이한 사유만 — 근거 서류 필수 (예: 부 병원 간병 → 입원 증빙)
       return [{ key: 'evidence:etc', label: '근거 서류', required: true }];

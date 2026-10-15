@@ -5,7 +5,6 @@ import {
   computeWarnings,
   statusOn,
   DOC_FT_APPLICATION,
-  DOC_FT_EVIDENCE,
   DOC_FT_REPORT,
   missingDocs,
   rebuildDocs,
@@ -514,7 +513,7 @@ function PendingDocs() {
       for (const doc of missingDocs(record)) {
         let deadline: string | undefined;
         if (doc.key === DOC_FT_APPLICATION) deadline = applicationDeadline(record, state.settings, holidays);
-        if (doc.key === DOC_FT_REPORT || doc.key === DOC_FT_EVIDENCE) deadline = reportDeadline(record, state.settings, holidays);
+        if (doc.key === DOC_FT_REPORT) deadline = reportDeadline(record, state.settings, holidays);
         out.push({ record, doc, deadline });
       }
     }
@@ -557,7 +556,7 @@ function PendingDocs() {
                 <span className="muted">
                   {' '}
                   · {formatKo(record.startDate)} {shortTitle(record)}
-                  {(doc.key === DOC_FT_REPORT || doc.key === DOC_FT_EVIDENCE) && now <= record.endDate && ' · 다녀온 후'}
+                  {doc.key === DOC_FT_REPORT && now <= record.endDate && ' · 다녀온 후'}
                   {deadline && ` · 기한 ${formatKo(deadline)}`}
                 </span>
               </span>

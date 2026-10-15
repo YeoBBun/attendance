@@ -115,7 +115,7 @@ export interface Settings {
 }
 
 export interface AppState {
-  version: 3;
+  version: 4;
   students: Student[];
   records: AttendanceRecord[];
   holidays: Holiday[];
@@ -134,5 +134,5 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export function emptyState(): AppState {
-  return { version: 3, students: [], records: [], holidays: [...PUBLIC_HOLIDAYS], settings: { ...DEFAULT_SETTINGS } };
+  return { version: 4, students: [], records: [], holidays: [...PUBLIC_HOLIDAYS], settings: { ...DEFAULT_SETTINGS } };
 }

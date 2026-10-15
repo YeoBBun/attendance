@@ -50,7 +50,7 @@ export function normalize(raw: unknown): AppState {
   if (!raw || typeof raw !== 'object') throw new Error('올바른 백업 파일이 아닙니다.');
   // 이전 버전 파일도 받으므로 version 은 숫자로 넓혀 읽는다.
   const s = raw as Partial<Omit<AppState, 'version'>> & { version?: number };
-  if (![1, 2, 3].includes(s.version ?? 0) || !Array.isArray(s.students) || !Array.isArray(s.records) || !Array.isArray(s.holidays)) {
+  if (![1, 2, 3, 4].includes(s.version ?? 0) || !Array.isArray(s.students) || !Array.isArray(s.records) || !Array.isArray(s.holidays)) {
     throw new Error('올바른 백업 파일이 아닙니다.');
   }
   const oldSettings = (s.settings ?? {}) as Partial<Settings> & { abroadMaxDays?: number };
@@ -68,8 +68,12 @@ export function normalize(raw: unknown): AppState {
     // 받은 상태는 그대로 두고 필수 여부만 기준표 값으로 맞춘다.
     const ctx = { holidays: indexHolidays(s.holidays), exams: settings.examPeriods };
     records = records.map((r) => ({ ...r, docs: rebuildDocs(r.docs, r, ctx, { resetRequired: true }) }));
+  } else if ((s.version ?? 0) < 4) {
+    // v4: 체험학습 근거자료(보고서에 첨부)와 질병결석 보호자 확인 항목을 없앴다. 서류 목록만 다시 만든다.
+    const ctx = { holidays: indexHolidays(s.holidays), exams: settings.examPeriods };
+    records = records.map((r) => ({ ...r, docs: rebuildDocs(r.docs, r, ctx) }));
   }
-  return { version: 3, students: s.students, records, holidays: s.holidays, settings };
+  return { version: 4, students: s.students, records, holidays: s.holidays, settings };
 }
 
 export function exportBackup(state: AppState): void {
