@@ -17,6 +17,8 @@ export interface NeisRow {
   att_type: string;
   /** 교시. 지각 "~2교시"/"조회", 조퇴 "5교시~", 결석은 빈 문자열 */
   note: string;
+  /** 나이스 「사유」 칸에 넣을 상세 사유. 없으면 빈 문자열 */
+  memo: string;
 }
 
 export interface NeisSkipped {
@@ -45,6 +47,11 @@ export function periodNote(r: AttendanceRecord, date: DateStr): string | null {
   }
   if (status === '조퇴') return r.leaveFrom === undefined ? null : `${r.leaveFrom}교시~`;
   return '';
+}
+
+/** 나이스 사유 칸에 넣을 글. 상세 사유가 없으면 출석인정 사유(예: 체험학습)로 대신한다 */
+export function neisMemo(r: AttendanceRecord): string {
+  return (r.memo ?? '').trim() || r.reason || '';
 }
 
 function attType(kind: AttendanceRecord['kind'], status: Status): string {
@@ -83,7 +90,7 @@ export function buildNeisFile(
         skipped.push({ ...base, label, reason: `${status} 교시가 없어요. 앱에서 교시를 넣거나 나이스에서 직접 넣어 주세요.` });
         continue;
       }
-      rows.push({ ...base, att_type: label, note });
+      rows.push({ ...base, att_type: label, note, memo: neisMemo(r) });
     }
   }
   const order = (a: { date: string; number: number }, b: { date: string; number: number }) =>

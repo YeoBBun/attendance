@@ -5,7 +5,7 @@ import { mergePublicHolidays } from '../domain/publicHolidays';
 import type { DeadlineBasis, HolidayType, Settings, Student } from '../domain/types';
 import { emptyState } from '../domain/types';
 import { exportBackup, normalize } from '../storage/db';
-import { newId, useStore } from '../store';
+import { BACKUP_REMIND_DAYS, newId, useNeedBackup, useStore } from '../store';
 import { sortStudents } from './common';
 
 /** "1 홍길동", "1<TAB>홍길동", "홍길동" 형식의 줄을 읽는다. 번호가 없으면 순서대로 붙인다. */
@@ -26,14 +26,17 @@ export function parseRoster(text: string, startNumber: number): { number: number
 }
 
 export function SettingsView() {
+  // 백업할 때가 됐으면 백업 칸을 맨 위로 올린다.
+  const needBackup = useNeedBackup();
   return (
     <div className="settings">
+      {needBackup && <BackupSettings />}
       <ClassSettings />
       <RosterSettings />
       <HolidaySettings />
       <ExamSettings />
       <RuleSettings />
-      <BackupSettings />
+      {!needBackup && <BackupSettings />}
     </div>
   );
 }
@@ -319,6 +322,7 @@ function BackupSettings() {
   const { state, replace, update } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState('');
+  const needBackup = useNeedBackup();
 
   const doExport = () => {
     const at = new Date().toISOString();
@@ -338,8 +342,15 @@ function BackupSettings() {
   };
 
   return (
-    <section className="card">
+    <section className={`card${needBackup ? ' attention' : ''}`}>
       <h3>백업</h3>
+      {needBackup && (
+        <p className="attention-note">
+          {state.settings.lastBackupAt
+            ? `마지막 백업 후 ${BACKUP_REMIND_DAYS}일이 지났어요. 지금 백업 파일을 저장해 두세요.`
+            : '아직 백업한 적이 없어요. 백업 파일을 저장해 두세요.'}
+        </p>
+      )}
       <p className="hint">
         데이터는 이 컴퓨터의 이 브라우저 안에만 저장되고 외부로 전송되지 않습니다. 브라우저 데이터를 지우거나 다른 컴퓨터에서 쓰려면 백업
         파일이 필요합니다. 정기적으로 백업하세요.

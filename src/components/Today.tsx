@@ -26,6 +26,8 @@ import {
 import { newId, useStore } from '../store';
 import { dayStatus, kindClass, KIND_SHORT, KindGuide, Modal, PeriodPicker, recordDates, sortStudents, studentLabel } from './common';
 import { FieldTripIntake } from './FieldTripIntake';
+import { Icon } from './icons';
+import { NeisExport } from './NeisExport';
 import { clean, RecordForm } from './RecordForm';
 import { RecordItem } from './RecordItem';
 
@@ -34,19 +36,26 @@ const PERIODS = [1, 2, 3, 4, 5, 6, 7];
 /** 기간·기한 정보가 꼭 필요해서 간편 입력 대신 자세히 입력으로 보내는 사유 */
 const NEEDS_DETAIL: ApprovedReason[] = ['체험학습', '법정감염병'];
 
-function bigDate(d: string): string {
-  const [y, m, day] = d.split('-').map(Number);
-  return `${y}년 ${m}월 ${day}일 ${WEEKDAY[new Date(y, m - 1, day).getDay()]}요일`;
+function bigDate(d: string): { main: string; weekday: string } {
+  const [, m, day] = d.split('-').map(Number);
+  const [y] = d.split('-').map(Number);
+  return { main: `${m}월 ${day}일`, weekday: `${WEEKDAY[new Date(y, m - 1, day).getDay()]}요일` };
+}
+
+/** 출결 꼬리표에 쓰는 짧은 표기. 예: 질병 결석, 체험학습 결석 */
+function shortTag(r: AttendanceRecord, date: string): string {
+  return `${r.kind === '출석인정' && r.reason ? r.reason : KIND_SHORT[r.kind]} ${statusOn(r, date)}`;
 }
 
 export function Today() {
   const { state, holidays } = useStore();
   const [date, setDate] = useState(today);
-  const [picker, setPicker] = useState(false);
   const [entryFor, setEntryFor] = useState<string | null>(null);
   const [intake, setIntake] = useState(false);
+  const [neis, setNeis] = useState(false);
   const now = today();
   const holiday = holidays.get(date);
+  const { main, weekday } = bigDate(date);
 
   const todays = useMemo(() => {
     const map = new Map<string, AttendanceRecord[]>();
@@ -60,97 +69,105 @@ export function Today() {
     return map;
   }, [state.records, date]);
 
+  const sub = holiday ? `${holiday.name} · 쉬는 날` : isWeekend(date) ? '주말' : date === now ? '오늘' : '';
+
   return (
     <div className="today">
-      <header className="today-head">
-        <button className="ghost" onClick={() => setDate(addDays(date, -1))} aria-label="전날">
-          ◀
+      <header className="date-bar">
+        <button className="icon-btn" onClick={() => setDate(addDays(date, -1))} aria-label="전날">
+          <Icon name="left" size={22} />
         </button>
-        <div>
-          <h2>{bigDate(date)}</h2>
-          {holiday ? (
-            <p className="muted">{holiday.name} · 쉬는 날</p>
-          ) : isWeekend(date) ? (
-            <p className="muted">주말</p>
-          ) : (
-            date !== now && (
-              <button className="link" onClick={() => setDate(now)}>
-                오늘로 돌아가기
+        <div className="date-center">
+          <h2>
+            {main} <span className="weekday">{weekday}</span>
+          </h2>
+          <p className="date-sub">
+            {sub && <span className={holiday || isWeekend(date) ? 'off' : 'is-today'}>{sub}</span>}
+            {date !== now && (
+              <button className="pill" onClick={() => setDate(now)}>
+                오늘로
               </button>
-            )
-          )}
+            )}
+          </p>
         </div>
-        <button className="ghost" onClick={() => setDate(addDays(date, 1))} aria-label="다음날">
-          ▶
+        <button className="icon-btn" onClick={() => setDate(addDays(date, 1))} aria-label="다음날">
+          <Icon name="right" size={22} />
         </button>
       </header>
 
       {state.students.length === 0 ? (
-        <p className="empty">
-          먼저 <a href="#settings">설정</a>에서 학생 명단을 등록하세요.
-        </p>
+        <div className="empty">
+          <p>학생 명단이 아직 없어요.</p>
+          <a className="button primary" href="#settings">
+            설정에서 명단 등록하기
+          </a>
+        </div>
       ) : (
-        <>
-          <DaySummary date={date} records={todays} onOpen={setEntryFor} />
-          <div className="actions">
-            <button className="action" onClick={() => setPicker(true)}>
-              출결 입력
-            </button>
-            <button className="action" onClick={() => setIntake(true)}>
-              체험학습 신청 접수
-            </button>
-          </div>
-        </>
+        <div className="today-grid">
+          <section className="card roster-card">
+            <div className="card-head">
+              <h3>학생을 눌러 출결 입력</h3>
+              <span className="muted">{state.students.length}명</span>
+            </div>
+            <RosterGrid date={date} records={todays} onPick={setEntryFor} />
+          </section>
+
+          <aside className="today-side">
+            <DaySummary date={date} records={todays} onOpen={setEntryFor} />
+            <div className="quick-actions">
+              <button className="tile-btn" onClick={() => setIntake(true)}>
+                <Icon name="plane" size={20} />
+                체험학습 접수
+              </button>
+              <button className="tile-btn" onClick={() => setNeis(true)}>
+                <Icon name="upload" size={20} />
+                나이스 파일
+              </button>
+            </div>
+            <PendingDocs />
+          </aside>
+        </div>
       )}
 
-      <PendingDocs />
-
-      {picker && <StudentPicker date={date} records={todays} onPick={setEntryFor} onClose={() => setPicker(false)} />}
       {intake && <FieldTripIntake onClose={() => setIntake(false)} />}
+      {neis && <NeisExport onClose={() => setNeis(false)} />}
       {entryFor && <QuickEntry studentId={entryFor} date={date} onClose={() => setEntryFor(null)} />}
     </div>
   );
 }
 
-/** 출결 입력: 학생 명단에서 학생을 고른다. 입력을 마치면 명단으로 돌아와 이어서 입력할 수 있다. */
-function StudentPicker({
+/** 학생 번호판. 그날 출결이 있는 학생은 종류 색으로 표시된다. */
+function RosterGrid({
   date,
   records,
   onPick,
-  onClose,
 }: {
   date: string;
   records: Map<string, AttendanceRecord[]>;
   onPick: (studentId: string) => void;
-  onClose: () => void;
 }) {
   const { state } = useStore();
   return (
-    <Modal title={`출결 입력 · ${formatKo(date)}`} onClose={onClose}>
-      <p className="hint">학생을 누르세요.</p>
-      <div className="student-grid">
-        {sortStudents(state.students).map((s) => {
-          const recs = records.get(s.id) ?? [];
-          return (
-            <button key={s.id} className={`student-btn${recs.length ? ' has' : ''}`} onClick={() => onPick(s.id)}>
-              <span className="num">{s.number}</span>
-              <span className="nm">{s.name}</span>
-              {recs.map((r) => (
-                <span key={r.id} className={`tag ${kindClass(r.kind)}`}>
-                  {r.kind === '출석인정' && r.reason ? r.reason : KIND_SHORT[r.kind]} {statusOn(r, date)}
-                </span>
-              ))}
-            </button>
-          );
-        })}
-      </div>
-      <footer className="form-actions">
-        <span className="spacer" />
-        <button className="primary big" onClick={onClose}>
-          완료
-        </button>
-      </footer>
-    </Modal>
+    <div className="student-grid">
+      {sortStudents(state.students).map((s) => {
+        const recs = records.get(s.id) ?? [];
+        return (
+          <button
+            key={s.id}
+            className={`student-btn${recs.length ? ` has ${kindClass(recs[0].kind)}` : ''}`}
+            onClick={() => onPick(s.id)}
+          >
+            <span className="num">{s.number}</span>
+            <span className="nm">{s.name}</span>
+            {recs.map((r) => (
+              <span key={r.id} className={`tag ${kindClass(r.kind)}`}>
+                {shortTag(r, date)}
+              </span>
+            ))}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -205,18 +222,29 @@ function DaySummary({
 
   return (
     <section className="card">
-      <h3>
-        {isToday ? '오늘' : formatKo(date)} 출결 현황
-        <span className="muted">{counts.length ? counts.map(([st, n]) => `${st} ${n}`).join(' · ') : ''}</span>
-        <span className="spacer" />
+      <div className="card-head">
+        <h3>{isToday ? '오늘' : formatKo(date)} 출결</h3>
         {lines.length > 0 && (
-          <button className="small" onClick={copy}>
-            {copied ? '복사됨 ✓' : '복사'}
+          <button className="ghost small" onClick={copy} title="메신저에 붙여넣기 좋게 복사">
+            <Icon name={copied ? 'check' : 'copy'} size={15} />
+            {copied ? '복사됨' : '복사'}
           </button>
         )}
-      </h3>
+      </div>
+      {counts.length > 0 && (
+        <div className="stat-row">
+          {counts.map(([st, n]) => (
+            <span key={st} className="stat">
+              <b>{n}</b>
+              {st}
+            </span>
+          ))}
+        </div>
+      )}
       {lines.length === 0 ? (
-        <p className="muted">모두 출석이에요.</p>
+        <p className="all-present">
+          <Icon name="check" size={16} /> 모두 출석이에요
+        </p>
       ) : (
         <ul className="day-summary">
           {lines.map((l) => (
@@ -224,7 +252,7 @@ function DaySummary({
               <button className="row-btn" onClick={() => onOpen(l.studentId)}>
                 <span className="who">{l.name}</span>
                 <span className={`tag ${kindClass(l.record.kind)}`}>{l.label}</span>
-                {l.detail && <span className="muted">({l.detail})</span>}
+                {l.detail && <span className="muted detail">{l.detail}</span>}
                 {l.warn && (
                   <span className="warn-mark" title={l.warn.join('\n')}>
                     ⚠
@@ -374,6 +402,7 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         <Choice
           label="종류"
           options={KINDS}
+          tone={kindClass}
           value={kind}
           onChange={(k) => {
             setKind(k);
@@ -414,7 +443,9 @@ function QuickEntry({ studentId, date, onClose }: { studentId: string; date: str
         )}
 
         <footer className="form-actions">
-          <button onClick={() => setDetail(true)}>자세히 입력 (여러 날 등)</button>
+          <button className="ghost" onClick={() => setDetail(true)}>
+            자세히 입력 (여러 날 등)
+          </button>
           <span className="spacer" />
           <button className="primary big" disabled={!ready || !!needsDetail} onClick={save}>
             저장
@@ -432,18 +463,25 @@ function Choice<T extends string>({
   options,
   value,
   onChange,
+  tone,
 }: {
   label: string;
   options: readonly T[];
   value: T | null;
   onChange: (v: T) => void;
+  /** 고른 버튼에 줄 색 (예: 종류별 색) */
+  tone?: (v: T) => string;
 }) {
   return (
     <div>
       <span className="field-label">{label}</span>
       <div className="big-seg">
         {options.map((o) => (
-          <button key={o} className={value === o ? 'on' : ''} onClick={() => onChange(o)}>
+          <button
+            key={o}
+            className={value === o ? `on${tone ? ` toned ${tone(o)}` : ''}` : ''}
+            onClick={() => onChange(o)}
+          >
             {o}
           </button>
         ))}
@@ -499,11 +537,14 @@ function PendingDocs() {
 
   return (
     <section className="card">
-      <h3>
-        받아야 할 서류 <span className="muted">{rows.length ? `${rows.length}건` : ''}</span>
-      </h3>
+      <div className="card-head">
+        <h3>받아야 할 서류</h3>
+        {rows.length > 0 && <span className="count-badge">{rows.length}</span>}
+      </div>
       {rows.length === 0 ? (
-        <p className="muted">모두 받았어요 👍</p>
+        <p className="all-present">
+          <Icon name="check" size={16} /> 모두 받았어요
+        </p>
       ) : (
         <ul className="pending">
           {rows.map(({ record, doc, deadline }) => (

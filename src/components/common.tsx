@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { AttendanceRecord, Kind, Status, Student } from '../domain/types';
+import { Icon } from './icons';
 import { countSchoolDays, formatKo, type HolidayIndex } from '../domain/calendar';
 import { periodNote } from '../domain/neis';
 import { statusOn } from '../domain/rules';
@@ -25,7 +26,9 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       <div className={`modal${wide ? ' wide' : ''}`} role="dialog" aria-label={title}>
         <header className="modal-head">
           <h2>{title}</h2>
-          <button className="ghost" onClick={onClose} aria-label="닫기">✕</button>
+          <button className="icon-btn" onClick={onClose} aria-label="닫기">
+            <Icon name="x" size={20} />
+          </button>
         </header>
         <div className="modal-body">{children}</div>
       </div>

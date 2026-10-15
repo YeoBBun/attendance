@@ -1,30 +1,32 @@
 import { useEffect, useState } from 'react';
-import { CalendarView } from './components/CalendarView';
 import { Dashboard } from './components/Dashboard';
+import { Icon, type IconName } from './components/icons';
 import { RecordList } from './components/RecordList';
 import { SettingsView } from './components/SettingsView';
 import { Today } from './components/Today';
-import { StoreProvider, useStore } from './store';
+import { StoreProvider, useNeedBackup, useStore } from './store';
 
-const TABS = [
-  { id: 'today', label: '오늘' },
-  { id: 'dashboard', label: '현황판' },
-  { id: 'records', label: '출결 기록' },
-  { id: 'calendar', label: '달력' },
-  { id: 'settings', label: '설정' },
-] as const;
+const TABS: readonly { id: 'today' | 'records' | 'stats' | 'settings'; label: string; icon: IconName }[] = [
+  { id: 'today', label: '오늘', icon: 'today' },
+  { id: 'records', label: '기록', icon: 'list' },
+  { id: 'stats', label: '통계', icon: 'chart' },
+  { id: 'settings', label: '설정', icon: 'gear' },
+];
 type TabId = (typeof TABS)[number]['id'];
 
-const BACKUP_REMIND_DAYS = 7;
+/** 예전 주소(#dashboard, #calendar)로 들어와도 맞는 탭을 연다. */
+const LEGACY: Record<string, TabId> = { dashboard: 'stats', calendar: 'records' };
 
 function readTab(): TabId {
   const h = location.hash.slice(1);
+  if (h in LEGACY) return LEGACY[h];
   return TABS.some((t) => t.id === h) ? (h as TabId) : 'today';
 }
 
 function Shell() {
   const { state, saveError } = useStore();
   const [tab, setTab] = useState<TabId>(readTab);
+  const needBackup = useNeedBackup();
 
   useEffect(() => {
     const onHash = () => setTab(readTab());
@@ -32,35 +34,33 @@ function Shell() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const last = state.settings.lastBackupAt ? Date.parse(state.settings.lastBackupAt) : 0;
-  const needBackup = state.records.length > 0 && Date.now() - last > BACKUP_REMIND_DAYS * 86_400_000;
-
   return (
     <div className="app">
       <header className="top">
-        <h1>
-          출결·서류 관리{state.settings.className && <span className="class-name"> · {state.settings.className}</span>}
-        </h1>
-        <nav>
+        <div className="brand">
+          <span className="logo" aria-hidden>
+            출
+          </span>
+          <h1>
+            출결·서류 관리
+            {state.settings.className && <span className="class-name">{state.settings.className}</span>}
+          </h1>
+        </div>
+        <nav aria-label="메뉴">
           {TABS.map((t) => (
-            <a key={t.id} href={`#${t.id}`} className={tab === t.id ? 'on' : ''}>
-              {t.label}
+            <a key={t.id} href={`#${t.id}`} className={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined}>
+              <Icon name={t.icon} />
+              <span className="nav-label">{t.label}</span>
+              {t.id === 'settings' && needBackup && <span className="dot" title="백업할 때가 됐어요" />}
             </a>
           ))}
         </nav>
       </header>
       {saveError && <div className="banner error">{saveError}</div>}
-      {needBackup && (
-        <div className="banner">
-          {last ? `마지막 백업 후 ${BACKUP_REMIND_DAYS}일이 지났습니다.` : '아직 백업한 적이 없습니다.'}{' '}
-          <a href="#settings">설정 → 백업</a>에서 백업 파일을 저장하세요.
-        </div>
-      )}
       <main>
         {tab === 'today' && <Today />}
-        {tab === 'dashboard' && <Dashboard />}
-        {tab === 'records' && <RecordList />}
-        {tab === 'calendar' && <CalendarView />}
+        {tab === 'records' && <RecordList initialView={location.hash === '#calendar' ? 'calendar' : 'list'} />}
+        {tab === 'stats' && <Dashboard />}
         {tab === 'settings' && <SettingsView />}
       </main>
     </div>
